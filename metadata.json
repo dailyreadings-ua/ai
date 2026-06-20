@@ -1,0 +1,6 @@
+{
+  "name": "Daily Readings",
+  "description": "Приложение для изучения текстов с использованием кривой забывания",
+  "requestFramePermissions": [],
+  "majorCapabilities": []
+}

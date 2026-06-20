@@ -1,0 +1,68 @@
+@import url('https://fonts.googleapis.com/css2?family=Roboto:wght@100;300;400;500;700&display=swap');
+@import "tailwindcss";
+
+@theme {
+  --font-sans: "Roboto", ui-sans-serif, system-ui, sans-serif;
+  --color-first: #d5ccab;
+  --color-second: #a3a289;
+  --color-third: #878568;
+  --color-forth: #505143;
+}
+
+:root {
+  --first-color: #d5ccab;
+  --second-color: #a3a289;
+  --third-color: #878568;
+  --forth-color: #505143;
+}
+
+html, body {
+  overscroll-behavior: none;
+  overflow: hidden;
+  background-color: var(--first-color);
+  
+  /* Scrollbar styling for Firefox */
+  scrollbar-width: thin;
+  scrollbar-color: var(--third-color) var(--first-color);
+}
+
+/* Scrollbar styling for Chrome/Safari/Edge */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: var(--first-color);
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--third-color);
+  border-radius: 10px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--forth-color);
+}
+
+#root {
+  height: 100vh;
+  width: 100vw;
+}
+
+/* Card Flip helper classes */
+.perspective-1000 {
+  perspective: 1000px;
+}
+.preserve-3d {
+  transform-style: preserve-3d;
+}
+.backface-hidden {
+  backface-visibility: hidden;
+  -webkit-backface-visibility: hidden;
+}
+.rotate-y-180 {
+  transform: rotateY(180deg);
+}
+
+
