@@ -58,6 +58,14 @@ function getAnyEl<T>(arr: T[]): T {
   return arr[idx];
 }
 
+// Helper to remove element from array by id
+function removeNode<T extends { id: string }>(el: T, arr: T[]) {
+  const idx = arr.findIndex(item => item.id === el.id);
+  if (idx > -1) {
+    arr.splice(idx, 1);
+  }
+}
+
 export function MatchDashboard({ studyingLessons, onBack }: MatchDashboardProps) {
   const [part1Data, setPart1Data] = useState<any | null>(null);
   const [part2Data, setPart2Data] = useState<any | null>(null);
@@ -402,71 +410,99 @@ export function MatchDashboard({ studyingLessons, onBack }: MatchDashboardProps)
           setTimeout(() => {
             const engine = engineRef.current;
             const matchedId = clickedSlot.id;
-            const matchedNode = engine.readyToUse.find(n => n.id === matchedId);
-            if (!matchedNode) return;
 
-            // Move to recently used
-            engine.recentlyUsed.push(matchedNode);
-            engine.readyToUse = engine.readyToUse.filter(n => n.id !== matchedId);
-            engine.currentViewLinks = engine.currentViewLinks.filter(n => n.id !== matchedId);
-            engine.currentViewTexts = engine.currentViewTexts.filter(n => n.id !== matchedId);
+            // Calculate 'size' of other options currently on board
+            const otherSlots = slots.filter(s => s.id !== matchedId);
+            const idSet = new Set(otherSlots.map(s => s.id));
+            const size = idSet.size;
 
-            if (engine.recentlyUsed.length === 3) {
-              const removed = engine.recentlyUsed.splice(1, 1)[0];
-              engine.archive.push(removed);
-            }
+            const curTextObj = engine.readyToUse.find(n => n.id === matchedId);
+            if (!curTextObj) return;
 
-            if (engine.readyToUse.length === 2 && engine.archive.length > 0) {
-              // Refill
-              const shuffledArchive = shuffleArray(engine.archive);
-              shuffledArchive.forEach(el => {
-                engine.readyToUse.push(el);
-                engine.preViewTexts.push(el);
-                engine.preViewLinks.push(el);
-              });
-              engine.archive = [];
-            }
+            const moveToRecentlyUsed = (el: RefNode) => {
+              engine.recentlyUsed.push(el);
+              removeNode(el, engine.readyToUse);
+              removeNode(el, engine.currentViewLinks);
+              removeNode(el, engine.currentViewTexts);
+              if (engine.recentlyUsed.length === 3) {
+                // shiftToArchive
+                const removed = engine.recentlyUsed.splice(1, 1)[0];
+                engine.archive.push(removed);
+              }
+              if (engine.readyToUse.length === 2) {
+                // refill
+                const shuffledArchive = shuffleArray(engine.archive);
+                shuffledArchive.forEach(item => {
+                  engine.readyToUse.push(item);
+                  engine.preViewTexts.push(item);
+                  engine.preViewLinks.push(item);
+                });
+                engine.archive = [];
+              }
+            };
 
-            // Fill next step (we have 4 options left on board, size is 4)
-            if (engine.currentViewLinks.length > 0) {
-              const anyLink = getAnyEl<RefNode>(engine.currentViewLinks);
-              
-              let len = anyLink.similar ? anyLink.similar.length : 0;
-              while (len > 0 && engine.currentViewLinks.length < 3) {
-                const similarId = anyLink.similar[len - 1];
-                const searchResult = engine.preViewLinks.find(n => n.id === similarId);
-                if (searchResult) {
-                  engine.currentViewLinks.push(searchResult);
-                  engine.preViewLinks = engine.preViewLinks.filter(n => n.id !== similarId);
+            const nextStep = (sz: number, el: RefNode) => {
+              moveToRecentlyUsed(el);
+              const linksView: RefNode[] = engine.currentViewLinks;
+              const textsView: RefNode[] = engine.currentViewTexts;
+              const linksPre: RefNode[] = engine.preViewLinks;
+              const textsPre: RefNode[] = engine.preViewTexts;
+
+              if (sz === 4) {
+                const anyLink = getAnyEl<RefNode>(linksView);
+
+                let len = anyLink.similar ? anyLink.similar.length : 0;
+                while (len > 0 && linksView.length < 3) {
+                  const similarId = anyLink.similar[len - 1];
+                  const searchResult = linksPre.find(n => n.id === similarId);
+                  if (searchResult) {
+                    linksView.push(searchResult);
+                    removeNode<RefNode>(searchResult, linksPre);
+                  }
+                  len--;
                 }
-                len--;
-              }
 
-              while (engine.currentViewLinks.length < 3 && engine.preViewLinks.length > 0) {
-                const newEl = getAnyEl<RefNode>(engine.preViewLinks);
-                engine.currentViewLinks.push(newEl);
-                engine.preViewLinks = engine.preViewLinks.filter(n => n.id !== newEl.id);
-              }
+                while (linksView.length < 3) {
+                  const newEl = getAnyEl<RefNode>(linksPre);
+                  linksView.push(newEl);
+                  removeNode<RefNode>(newEl, linksPre);
+                }
 
-              if (engine.preViewTexts.length > 0) {
-                const textToAdd = engine.preViewTexts.find(n => n.id === anyLink.id);
+                let textToAdd = textsPre.find(n => n.id === anyLink.id);
+                if (!textToAdd && textsPre.length > 0) {
+                  textToAdd = getAnyEl<RefNode>(textsPre);
+                }
                 if (textToAdd) {
-                  engine.currentViewTexts.push(textToAdd);
-                  engine.preViewTexts = engine.preViewTexts.filter(n => n.id !== anyLink.id);
+                  textsView.push(textToAdd);
+                  removeNode<RefNode>(textToAdd, textsPre);
+                }
+              } else {
+                const anyLink = getAnyEl<RefNode>(linksPre);
+                if (anyLink) {
+                  linksView.push(anyLink);
+                  removeNode<RefNode>(anyLink, linksPre);
+                }
+
+                const anyText = getAnyEl<RefNode>(textsPre);
+                if (anyText) {
+                  textsView.push(anyText);
+                  removeNode<RefNode>(anyText, textsPre);
                 }
               }
-            }
+            };
 
-            // Replace options in-place with a stylish fade-in
+            // Execute next step state mutation
+            nextStep(size, curTextObj);
+
+            // Get the newly added elements at the end of current views
             const nextText = engine.currentViewTexts[engine.currentViewTexts.length - 1];
             const nextLink = engine.currentViewLinks[engine.currentViewLinks.length - 1];
 
+            // Apply slot replacement with fresh cards at the matched indexes
             setSlots(prev => {
               const updated = [...prev];
-              // Map the text slot
-              const textSlotIdx = firstSlot.type === 'text' ? firstIdx : slotIndex;
               if (nextText) {
-                updated[textSlotIdx] = {
+                updated[firstIdx] = {
                   id: nextText.id,
                   type: 'text',
                   text: nextText.text,
@@ -476,10 +512,8 @@ export function MatchDashboard({ studyingLessons, onBack }: MatchDashboardProps)
                   isSelected: false
                 };
               }
-              // Map the link slot
-              const linkSlotIdx = firstSlot.type === 'link' ? firstIdx : slotIndex;
               if (nextLink) {
-                updated[linkSlotIdx] = {
+                updated[slotIndex] = {
                   id: nextLink.id,
                   type: 'link',
                   text: `${nextLink.book}.${nextLink.chapter}:${nextLink.verse}`,
@@ -491,7 +525,7 @@ export function MatchDashboard({ studyingLessons, onBack }: MatchDashboardProps)
               }
               return updated;
             });
-            
+
           }, 600);
 
         } else {

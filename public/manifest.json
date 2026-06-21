@@ -1,0 +1,18 @@
+{
+  "name": "Daily Readings",
+  "short_name": "Readings",
+  "description": "Приложение для изучения текстов с использованием кривой забывания",
+  "start_url": ".",
+  "display": "standalone",
+  "background_color": "#d5ccab",
+  "theme_color": "#505143",
+  "orientation": "portrait-primary",
+  "icons": [
+    {
+      "src": "icon.svg",
+      "sizes": "192x192 512x512",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}
