@@ -1,13 +1,13 @@
 const CACHE_NAME = 'readings-pwa-v1';
 const ASSETS = [
-  './',
-  './index.html',
-  './manifest.json',
-  './icon.svg',
-  './icon-192.png',
-  './icon-512.png',
-  './fund1.json',
-  './fund2.json'
+  '/ai/',
+  '/ai/index.html',
+  '/ai/manifest.json',
+  '/ai/icon.svg',
+  '/ai/icon-192.png',
+  '/ai/icon-512.png',
+  '/ai/fund1.json',
+  '/ai/fund2.json'
 ];
 
 self.addEventListener('install', (event) => {
@@ -74,7 +74,7 @@ self.addEventListener('fetch', (event) => {
         .catch(() => {
           // Fallback if offline
           if (event.request.mode === 'navigate') {
-            return caches.match('./index.html') || caches.match('./');
+            return caches.match('/ai/index.html') || caches.match('/ai/');
           }
         });
     })
