@@ -64,7 +64,7 @@ export function Study({
   const currentVerse = versesData.find(v => String(v.id) === String(verseId)) || versesData[0];
 
   const handleShare = () => {
-    const text = `"${currentVerse.text}"\n${currentVerse.book} ${currentVerse.chapter}:${currentVerse.verse}`;
+    const text = `"${currentVerse.text}"\n${currentVerse.book}.${currentVerse.chapter}:${currentVerse.verse}`;
     if (navigator.share) {
       navigator.share({ text }).catch(console.error);
     } else {
@@ -117,7 +117,7 @@ export function Study({
                 "{currentVerse.text}"
               </div>
               <div className="mt-4 text-right text-[2.5vh] font-medium text-[#a3a289]">
-                {currentVerse.book} {currentVerse.chapter}:{currentVerse.verse}
+                {currentVerse.book}.{currentVerse.chapter}:{currentVerse.verse}
               </div>
               <div className="absolute -top-4 -left-4 flex h-11 w-11 items-center justify-center rounded-full bg-[#a3a289] shadow-xl text-[2.2vh] font-bold text-[#d5ccab] border-2 border-[#d5ccab] z-10">
                 {verseIndex + 1}
@@ -236,7 +236,7 @@ export function Study({
                         {idx === verseIndex && <span className="text-[1.4vh] uppercase tracking-wider bg-[#505143] px-2 py-0.5 rounded text-[#d5ccab]">Сейчас</span>}
                       </div>
                       <div className="text-[1.8vh] opacity-80 leading-tight">
-                        {v ? `${v.book} ${v.chapter}:${v.verse}` : '...'}
+                        {v ? `${v.book}.${v.chapter}:${v.verse}` : '...'}
                       </div>
                     </motion.div>
                   );

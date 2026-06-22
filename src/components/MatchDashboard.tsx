@@ -113,8 +113,8 @@ export function MatchDashboard({ studyingLessons, onBack }: MatchDashboardProps)
       try {
         setIsLoadingData(true);
         const [p1, p2] = await Promise.all([
-          fetch('/fund1.json').then(r => r.json()),
-          fetch('/fund2.json').then(r => r.json())
+          fetch(`${import.meta.env.BASE_URL}fund1.json`).then(r => r.json()),
+          fetch(`${import.meta.env.BASE_URL}fund2.json`).then(r => r.json())
         ]);
         setPart1Data(p1);
         setPart2Data(p2);

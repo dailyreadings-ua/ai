@@ -108,7 +108,7 @@ export default function App() {
     setIsLoading(true);
     setSelectedPart(part);
     try {
-      const response = await fetch(`/fund${part}.json`);
+      const response = await fetch(`${import.meta.env.BASE_URL}fund${part}.json`);
       if (!response.ok) throw new Error('Failed to fetch fund data');
       const data = await response.json();
       setFundData(data);

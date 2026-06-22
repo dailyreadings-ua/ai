@@ -95,6 +95,12 @@ export function CardsDashboard({
   const [firstAttemptResults, setFirstAttemptResults] = useState<Record<string, 'correct' | 'incorrect'>>({});
   const [currentCardIndex, setCurrentCardIndex] = useState(0);
   const [isFlipped, setIsFlipped] = useState(false);
+  const [dragX, setDragX] = useState(0);
+  const [exitX, setExitX] = useState(0);
+  const [exitRotate, setExitRotate] = useState(0);
+  const [maxCardIndexReached, setMaxCardIndexReached] = useState(0);
+  const [currentRoundResults, setCurrentRoundResults] = useState<Record<string, 'correct' | 'incorrect'>>({});
+  const [isDragging, setIsDragging] = useState(false);
   const [correctCardIds, setCorrectCardIds] = useState<string[]>([]);
   const [incorrectCardIds, setIncorrectCardIds] = useState<string[]>([]);
 
@@ -111,6 +117,12 @@ export function CardsDashboard({
   const [currentPassFailures, setCurrentPassFailures] = useState<CardItem[]>([]);
   const [currentPassSuccesses, setCurrentPassSuccesses] = useState<CardItem[]>([]);
 
+  const { correctCount, incorrectCount } = useMemo(() => {
+    const correct = initialDeck.filter(c => firstAttemptResults[c.id] === 'correct').length;
+    const incorrect = initialDeck.filter(c => firstAttemptResults[c.id] === 'incorrect').length;
+    return { correctCount: correct, incorrectCount: incorrect };
+  }, [initialDeck, firstAttemptResults]);
+
   // Ticks for countdown timer updates
   const [, setTick] = useState(0);
   useEffect(() => {
@@ -124,8 +136,8 @@ export function CardsDashboard({
       try {
         setIsLoadingData(true);
         const [p1, p2] = await Promise.all([
-          fetch('/fund1.json').then(r => r.json()),
-          fetch('/fund2.json').then(r => r.json())
+          fetch(`${import.meta.env.BASE_URL}fund1.json`).then(r => r.json()),
+          fetch(`${import.meta.env.BASE_URL}fund2.json`).then(r => r.json())
         ]);
         setPart1Data(p1);
         setPart2Data(p2);
@@ -345,7 +357,9 @@ export function CardsDashboard({
     setCardsDeck(finalDeck);
     setInitialDeck(finalDeck);
     setFirstAttemptResults({});
+    setCurrentRoundResults({});
     setCurrentCardIndex(0);
+    setMaxCardIndexReached(0);
     setIsFlipped(false);
     
     // Reset round/pass stats
@@ -368,6 +382,12 @@ export function CardsDashboard({
     // Log failures / successes for current pass
     const updatedFailures = [...currentPassFailures];
     const updatedSuccesses = [...currentPassSuccesses];
+    
+    // Always store the result of the current card in the current pass
+    setCurrentRoundResults(prev => ({
+      ...prev,
+      [cardId]: knows ? 'correct' : 'incorrect'
+    }));
     
     if (knows) {
       updatedSuccesses.push(currentCard);
@@ -397,9 +417,9 @@ export function CardsDashboard({
       } else {
         setCurrentPassFailures(prev => [...prev, currentCard]);
       }
-      setTimeout(() => {
-        setCurrentCardIndex(prev => prev + 1);
-      }, 200);
+      const nextIndex = currentCardIndex + 1;
+      setCurrentCardIndex(nextIndex);
+      setMaxCardIndexReached(prev => Math.max(prev, nextIndex));
     } else {
       // Reached end of current deck pass
       const totalFailures = updatedFailures.length;
@@ -423,6 +443,8 @@ export function CardsDashboard({
         setIsFlipped(false);
         setCardsDeck(nextDeck);
         setCurrentCardIndex(0);
+        setMaxCardIndexReached(0);
+        setCurrentRoundResults({});
         setRetryPassCount(nextPassNum);
         setCurrentPassFailures([]);
         setCurrentPassSuccesses([]);
@@ -558,37 +580,6 @@ export function CardsDashboard({
       exit={{ opacity: 0 }}
       className="flex h-full flex-col bg-[#d5ccab] overflow-hidden relative"
     >
-      {/* HEADER */}
-      <div className="flex h-[10vh] min-h-[10vh] items-center justify-between border-b border-[#a3a289]/10 px-6">
-        <button 
-          onClick={() => {
-            if (viewState === 'game') {
-              setAppDialog({
-                title: 'Выйти из раунда?',
-                message: 'Вы действительно хотите прервать текущий раунд? Прогресс раунда не будет зафиксирован.',
-                type: 'confirm',
-                onConfirm: () => {
-                  setViewState('setup');
-                }
-              });
-            } else if (viewState === 'summary') {
-              // Just return to list
-              setViewState('setup');
-            } else if (viewState === 'settings') {
-              setViewState('setup');
-            } else {
-              onBack();
-            }
-          }}
-          className="text-[2.2vh] font-medium text-[#505143] hover:opacity-75"
-        >
-          {viewState === 'game' ? 'Выйти' : 'Назад'}
-        </button>
-        <div className="text-[3vh] font-bold text-[#878568]">
-          {viewState === 'game' ? 'Мемори-Раунд' : 'Повторение'}
-        </div>
-        <div className="w-[10vw]" /> {/* spacer */}
-      </div>
 
       <AnimatePresence mode="wait">
         {/* VIEW 1: SETUP CARD CHECKBOXES */}
@@ -600,6 +591,11 @@ export function CardsDashboard({
             exit={{ opacity: 0, y: -15 }}
             className="flex-1 flex flex-col min-h-0"
           >
+            <div className="flex h-[10vh] min-h-[10vh] items-center justify-center border-b border-[#a3a289]/10 px-6 flex-shrink-0">
+              <div className="text-[3.5vh] font-bold text-[#878568]">
+                Повторение
+              </div>
+            </div>
             {studyingLessons.length === 0 ? (
               <div className="flex-1 flex flex-col items-center justify-center p-8 text-center text-[#505143] gap-4">
                 <svg className="h-[12vh] w-[12vh] fill-[#878568]/40" viewBox="0 0 576 512">
@@ -671,7 +667,7 @@ export function CardsDashboard({
                 </div>
 
                 {/* Confirm button */}
-                <div className="p-4 bg-white/70 border-t border-[#a3a289]/20">
+                <div className="p-4 flex-shrink-0">
                   <button
                     disabled={selectedLessonKeys.length === 0}
                     onClick={handleProceedToSettings}
@@ -693,12 +689,19 @@ export function CardsDashboard({
         {viewState === 'settings' && (
           <motion.div
             key="settings"
-            initial={{ opacity: 0, x: 50 }}
-            animate={{ opacity: 1, x: 0 }}
-            exit={{ opacity: 0, x: -50 }}
-            className="flex-1 p-6 flex flex-col justify-between min-h-0"
+            initial={{ opacity: 0, y: 15 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -15 }}
+            className="flex-1 flex flex-col min-h-0"
           >
-            <div className="flex-1 overflow-y-auto pr-1 flex flex-col gap-6 custom-scrollbar pb-4">
+            <div className="flex h-[10vh] min-h-[10vh] items-center justify-center border-b border-[#a3a289]/10 px-6 flex-shrink-0">
+              <div className="text-[3.5vh] font-bold text-[#878568]">
+                Повторение
+              </div>
+            </div>
+
+            <div className="flex-1 p-6 flex flex-col justify-between min-h-0">
+              <div className="flex-1 overflow-y-auto pr-1 flex flex-col gap-6 custom-scrollbar pb-4">
               <h2 className="text-[3.2vh] font-bold text-[#505143] mb-2 leading-snug">Параметры карточек</h2>
               
               {/* Option 1: Что повторяем */}
@@ -841,6 +844,7 @@ export function CardsDashboard({
             >
               Начать раунд
             </button>
+            </div>
           </motion.div>
         )}
 
@@ -851,53 +855,220 @@ export function CardsDashboard({
             initial={{ opacity: 0, scale: 0.95 }}
             animate={{ opacity: 1, scale: 1 }}
             exit={{ opacity: 0, scale: 0.95 }}
-            className="flex-1 p-6 flex flex-col justify-between"
+            className="flex-1 px-6 pt-6 pb-6 flex flex-col justify-between min-h-0"
           >
             {/* Header progress info */}
-            <div>
-              <div className="flex items-center justify-between text-[1.8vh] text-[#878568] mb-1 font-medium">
+            <div className="flex-shrink-0">
+              <div className="flex items-center justify-between text-[1.8vh] text-[#878568] mb-2 font-medium">
                 <div className="flex flex-col gap-0.5">
-                  <span>Карточка {currentCardIndex + 1} из {cardsDeck.length}</span>
-                  {retryPassCount > 0 && (
-                    <span className="text-[1.4vh] text-amber-900 font-bold bg-amber-50 border border-amber-200/40 px-2 py-0.5 rounded w-fit mt-1">
-                      Повтор: круг {retryPassCount}
+                  <div className="flex items-center gap-2">
+                    <span className="text-[2vh] font-bold text-[#505143]">Карточка {currentCardIndex + 1} из {cardsDeck.length}</span>
+                    {retryPassCount > 0 && (
+                      <span className="text-[1.4vh] text-amber-950 font-bold bg-amber-500/20 border border-amber-500/40 px-2 py-0.5 rounded">
+                        круг {retryPassCount}
+                      </span>
+                    )}
+                  </div>
+                  {/* Visual mini-indicator of current session counts */}
+                  <div className="flex items-center gap-3 text-[1.6vh] mt-1">
+                    <span className="flex items-center gap-1 text-emerald-800 font-semibold">
+                      <span className="h-2 w-2 rounded-full bg-emerald-600 animate-pulse" />
+                      {correctCount} верно
                     </span>
-                  )}
+                    <span className="flex items-center gap-1 text-rose-800 font-semibold">
+                      <span className="h-2 w-2 rounded-full bg-rose-400" />
+                      {incorrectCount} неверно
+                    </span>
+                  </div>
                 </div>
                 <span className="text-[#505143] text-right font-light italic">
                   Часть {cardsDeck[currentCardIndex]?.part} (урок {cardsDeck[currentCardIndex]?.lessonIndex + 1})
                 </span>
               </div>
-              <div className="h-1.5 w-full rounded-full bg-[#a3a289]/20 overflow-hidden mb-6">
-                <div 
-                  className="h-full bg-[#878568] transition-all duration-300" 
-                  style={{ width: `${((currentCardIndex + 1) / cardsDeck.length) * 100}%` }}
-                />
+              
+              {/* Segmented Progress Bar with navigation arrows */}
+              <div className="flex items-center gap-3 w-full mb-4">
+                {/* Left Arrow */}
+                <button
+                  type="button"
+                  disabled={currentCardIndex === 0}
+                  onClick={() => {
+                    if (currentCardIndex > 0) {
+                      setIsFlipped(false);
+                      setCurrentCardIndex(prev => prev - 1);
+                    }
+                  }}
+                  className={`p-1.5 rounded-xl transition-all ${
+                    currentCardIndex === 0
+                      ? 'opacity-20 cursor-not-allowed text-[#878568]'
+                      : 'text-[#505143] hover:bg-[#878568]/15 active:scale-95 cursor-pointer'
+                  }`}
+                  title="Назад"
+                >
+                  <svg className="h-[2.5vh] w-[2.5vh] fill-current" viewBox="0 0 320 512">
+                    <path d="M41.4 233.4c-12.5 12.5-12.5 32.8 0 45.3l160 160c12.5 12.5 32.8 12.5 45.3 0s12.5-32.8 0-45.3L109.3 256 246.6 118.6c12.5-12.5 12.5-32.8 0-45.3s-32.8-12.5-45.3 0l-160 160z"/>
+                  </svg>
+                </button>
+
+                {/* Segmented Progress Bar Container */}
+                <div className="flex gap-1 flex-1">
+                  {initialDeck.map((c) => {
+                    const res = firstAttemptResults[c.id];
+                    const isActive = cardsDeck[currentCardIndex] && c.id === cardsDeck[currentCardIndex].id;
+                    
+                    let pillBg = "bg-[#a3a289]/25";
+                    if (res === 'correct') {
+                      pillBg = "bg-[#047857]"; // solid green
+                    } else if (res === 'incorrect') {
+                      pillBg = "bg-[#fb7185]"; // solid rose
+                    }
+                    
+                    return (
+                      <div 
+                        key={c.id} 
+                        className={`h-2 flex-grow rounded-full transition-all duration-300 ${pillBg} ${
+                          isActive ? 'ring-2 ring-[#505143] ring-offset-2 scale-y-125 bg-[#505143]' : ''
+                        }`}
+                      />
+                    );
+                  })}
+                </div>
+
+                {/* Right Arrow */}
+                <button
+                  type="button"
+                  disabled={currentCardIndex >= maxCardIndexReached}
+                  onClick={() => {
+                    if (currentCardIndex < maxCardIndexReached) {
+                      setIsFlipped(false);
+                      setCurrentCardIndex(prev => prev + 1);
+                    }
+                  }}
+                  className={`p-1.5 rounded-xl transition-all ${
+                    currentCardIndex >= maxCardIndexReached
+                      ? 'opacity-20 cursor-not-allowed text-[#878568]'
+                      : 'text-[#505143] hover:bg-[#878568]/15 active:scale-95 cursor-pointer'
+                  }`}
+                  title="Вперед"
+                >
+                  <svg className="h-[2.5vh] w-[2.5vh] fill-current" viewBox="0 0 320 512">
+                    <path d="M278.6 233.4c12.5 12.5 12.5 32.8 0 45.3l-160 160c-12.5 12.5-32.8 12.5-45.3 0s-12.5-32.8 0-45.3L210.7 256 73.4 118.6c-12.5-12.5-12.5-32.8 0-45.3s32.8-12.5 45.3 0l160 160z"/>
+                  </svg>
+                </button>
               </div>
             </div>
 
             {/* 3D Flipping Card Container */}
-            <div className="flex-1 flex items-center justify-center mb-8">
-              <div className="w-full max-w-md h-[45vh] perspective-1000 relative">
+            <div className="flex-1 min-h-0 w-full max-w-md mx-auto flex items-stretch justify-center">
+              <motion.div 
+                key={cardsDeck[currentCardIndex]?.id}
+                drag={currentCardIndex === maxCardIndexReached ? "x" : false}
+                dragConstraints={{ left: 0, right: 0 }}
+                dragElastic={0.8}
+                onDragStart={() => {
+                  if (currentCardIndex === maxCardIndexReached) {
+                    setIsDragging(true);
+                  }
+                }}
+                onDrag={(_, info) => {
+                  if (currentCardIndex === maxCardIndexReached) {
+                    setDragX(info.offset.x);
+                  }
+                }}
+                onDragEnd={(_, info) => {
+                  if (currentCardIndex !== maxCardIndexReached) return;
+                  // Small delay to ensure pointer tap doesn't fire immediately if it was dragged
+                  setTimeout(() => {
+                    setIsDragging(false);
+                  }, 50);
+
+                  const swipeThreshold = 120;
+                  if (info.offset.x > swipeThreshold) {
+                    setExitX(1000);
+                    setExitRotate(30);
+                  } else if (info.offset.x < -swipeThreshold) {
+                    setExitX(-1000);
+                    setExitRotate(-30);
+                  } else {
+                    setExitX(0);
+                    setExitRotate(0);
+                    setDragX(0);
+                  }
+                }}
+                onTap={() => {
+                  if (!isDragging) {
+                    setIsFlipped(prev => !prev);
+                  }
+                }}
+                animate={{
+                  x: exitX,
+                  rotate: exitX !== 0 ? exitRotate : dragX / 15,
+                  opacity: exitX !== 0 ? 0 : 1,
+                  scale: exitX !== 0 ? 0.9 : 1
+                }}
+                transition={{
+                  type: 'spring',
+                  stiffness: exitX !== 0 ? 160 : 300,
+                  damping: exitX !== 0 ? 20 : 26
+                }}
+                onAnimationComplete={() => {
+                  if (exitX !== 0) {
+                    const isCorrect = exitX > 0;
+                    handleCardFeedback(isCorrect);
+                    setExitX(0);
+                    setExitRotate(0);
+                    setDragX(0);
+                  }
+                }}
+                className={`w-full h-full min-h-0 perspective-1000 relative select-none ${
+                  currentCardIndex === maxCardIndexReached ? 'cursor-grab active:cursor-grabbing' : 'cursor-pointer'
+                }`}
+              >
+                {/* Drag status overlay on card wrapper for seamless motion with the card */}
+                {dragX > 15 && (
+                  <div 
+                    className="absolute inset-0 rounded-3xl bg-emerald-700/20 flex flex-col items-center justify-center pointer-events-none z-40 transition-opacity duration-75"
+                    style={{ opacity: Math.min(Math.max((dragX - 15) / 100, 0), 1) }}
+                  >
+                    <div className="bg-[#505143] text-emerald-400 font-black text-[2.80vh] tracking-widest px-8 py-4 rounded-2xl border border-emerald-500/30 shadow-2xl uppercase">
+                      Помню
+                    </div>
+                  </div>
+                )}
+                {dragX < -15 && (
+                  <div 
+                    className="absolute inset-0 rounded-3xl bg-rose-700/20 flex flex-col items-center justify-center pointer-events-none z-40 transition-opacity duration-75"
+                    style={{ opacity: Math.min(Math.max((-dragX - 15) / 100, 0), 1) }}
+                  >
+                    <div className="bg-[#505143] text-rose-400 font-black text-[2.80vh] tracking-widest px-8 py-4 rounded-2xl border border-rose-500/30 shadow-2xl uppercase">
+                      Не помню
+                    </div>
+                  </div>
+                )}
+
                 <div 
                   className={`w-full h-full duration-500 preserve-3d relative transition-transform ${
                     isFlipped ? 'rotate-y-180' : ''
                   }`}
-                  onClick={() => setIsFlipped(!isFlipped)}
                 >
                   
                   {/* FRONT SIDE */}
-                  <div className="absolute inset-0 backface-hidden rounded-3xl bg-[#505143] p-6 flex flex-col justify-between shadow-2xl border border-[#a3a289]/10 select-none cursor-pointer">
-                    <div className="flex justify-between items-start">
-                      <div className="bg-[#a3a289] h-[5.5vh] w-[5.5vh] rounded-full flex items-center justify-center text-[2.5vh] text-[#d5ccab] font-bold">
-                        {currentCardIndex + 1}
+                  <div className="absolute inset-0 backface-hidden rounded-3xl bg-[#505143] p-6 flex flex-col justify-between shadow-2xl border border-[#a3a289]/10 select-none">
+                    {/* Visual marker if already completed */}
+                    {currentCardIndex < maxCardIndexReached && (
+                      <div className="w-full flex justify-center mb-1 flex-shrink-0">
+                        {currentRoundResults[cardsDeck[currentCardIndex]?.id] === 'correct' ? (
+                          <span className="text-emerald-400 border border-emerald-500/35 text-[1.4vh] px-4 py-1 rounded-full uppercase tracking-widest font-black bg-[#444538]">
+                            Пройдено • Помню
+                          </span>
+                        ) : (
+                          <span className="text-rose-400 border border-rose-500/35 text-[1.4vh] px-4 py-1 rounded-full uppercase tracking-widest font-black bg-[#444538]">
+                            Пройдено • Не помню
+                          </span>
+                        )}
                       </div>
-                      <div className="text-[1.5vh] text-[#a3a289] uppercase tracking-wider font-semibold">
-                        {cardsDeck[currentCardIndex]?.targetSide === 'address_by_text' ? 'Адрес по тексту' : 'Текст по адресу'}
-                      </div>
-                    </div>
-
-                    <div className="flex-1 flex flex-col items-center justify-center p-4">
+                    )}
+                    <div className="flex-grow flex flex-col items-center justify-center p-4 min-h-0">
                       {(() => {
                         const targetSide = cardsDeck[currentCardIndex]?.targetSide;
                         const v = cardsDeck[currentCardIndex]?.verse;
@@ -905,19 +1076,18 @@ export function CardsDashboard({
 
                         if (targetSide === 'address_by_text') {
                           return (
-                            <p className="text-[2.6vh] leading-relaxed text-[#d5ccab] text-center font-serif italic">
-                              "{v.text}"
-                            </p>
+                            <div className="text-center flex flex-col items-center justify-center h-full max-h-[42vh] overflow-y-auto custom-scrollbar p-2">
+                              <p className="text-[2.8vh] sm:text-[3vh] leading-relaxed text-[#d5ccab] text-center font-serif italic">
+                                "{v.text}"
+                              </p>
+                            </div>
                           );
                         } else {
                           return (
-                            <div className="text-center">
-                              <h3 className="text-[4vh] font-bold text-[#d5ccab] tracking-wide mb-2 leading-tight">
-                                {v.book}
+                            <div className="text-center flex flex-col items-center justify-center h-full">
+                              <h3 className="text-[4.5vh] sm:text-[5vh] font-black text-[#d5ccab] tracking-wide leading-tight">
+                                {v.book}.{v.chapter}:{v.verse}
                               </h3>
-                              <p className="text-[3.2vh] font-light text-[#a3a289]">
-                                Глава {v.chapter}, Стих {v.verse}
-                              </p>
                             </div>
                           );
                         }
@@ -933,7 +1103,7 @@ export function CardsDashboard({
 
                       return (
                         <div 
-                          className="flex flex-col items-center gap-1.5 select-none self-center bg-[#505143] py-1 px-3 rounded-full"
+                          className="flex flex-col items-center gap-1.5 select-none self-center bg-[#505143] py-1 px-3 rounded-full mb-1"
                           onClick={(e) => {
                             e.stopPropagation();
                           }}
@@ -949,15 +1119,15 @@ export function CardsDashboard({
                                     e.stopPropagation();
                                     handleSetRating(String(v.id), targetSide, starVal);
                                   }}
-                                  className="p-0.5 transition-transform active:scale-95 hover:scale-110"
+                                  className="p-1 transition-all duration-200 active:scale-90 hover:scale-110"
                                 >
                                   {isStarred ? (
-                                    <svg className="h-[3.2vh] w-[3.2vh] fill-amber-300 stroke-amber-400 drop-shadow" viewBox="0 0 24 24">
-                                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5" d="M11.48 3.499c.3-.921 1.603-.921 1.902 0l1.519 4.674a1 1 0 00.95.69h4.915c.969 0 1.371 1.24.588 1.81l-3.976 2.888a1 1 0 00-.363 1.118l1.518 4.674c.3.922-.755 1.688-1.538 1.118l-3.976-2.888a1 1 0 00-1.176 0l-3.976 2.888c-.783.57-1.838-.197-1.538-1.118l1.518-4.674a1 1 0 00-.363-1.118l-3.976-2.888c-.784-.57-.38-1.81.588-1.81h4.914a1 1 0 00.951-.69l1.519-4.674z" />
+                                    <svg className="h-[2.6vh] w-[2.6vh] fill-[#d5ccab] stroke-[#d5ccab]" viewBox="0 0 24 24">
+                                      <circle cx="12" cy="12" r="8" strokeWidth="2" />
                                     </svg>
                                   ) : (
-                                    <svg className="h-[3.2vh] w-[3.2vh] fill-transparent stroke-[#d5ccab]/40" viewBox="0 0 24 24">
-                                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5" d="M11.48 3.499c.3-.921 1.603-.921 1.902 0l1.519 4.674a1 1 0 00.95.69h4.915c.969 0 1.371 1.24.588 1.81l-3.976 2.888a1 1 0 00-.363 1.118l1.518 4.674c.3.922-.755 1.688-1.538 1.118l-3.976-2.888a1 1 0 00-1.176 0l-3.976 2.888c-.783.57-1.838-.197-1.538-1.118l1.518-4.674a1 1 0 00-.363-1.118l-3.976-2.888c-.784-.57-.38-1.81.588-1.81h4.914a1 1 0 00.951-.69l1.519-4.674z" />
+                                    <svg className="h-[2.6vh] w-[2.6vh] fill-transparent stroke-[#d5ccab]/40" viewBox="0 0 24 24">
+                                      <circle cx="12" cy="12" r="8" strokeWidth="2" />
                                     </svg>
                                   )}
                                 </button>
@@ -967,158 +1137,53 @@ export function CardsDashboard({
                         </div>
                       );
                     })()}
-
-                    <div className="text-center text-[1.6vh] tracking-widest uppercase text-[#a3a289] font-medium pt-2">
-                      Нажмите, чтобы перевернуть
-                    </div>
                   </div>
 
                   {/* BACK SIDE */}
-                  <div className="absolute inset-0 backface-hidden rotate-y-180 rounded-3xl bg-[#878568] p-6 flex flex-col justify-between shadow-2xl border border-white/10 select-none cursor-pointer">
-                    <div className="flex justify-between items-center bg-[#505143]/40 rounded-2xl p-2.5">
-                      <div className="text-[1.5vh] font-bold text-[#d5ccab] uppercase tracking-wider">Ответ</div>
-                      <div className="text-[1.8vh] text-[#d5ccab] font-light italic">
-                        {cardsDeck[currentCardIndex]?.verse.book} {cardsDeck[currentCardIndex]?.verse.chapter}:{cardsDeck[currentCardIndex]?.verse.verse}
+                  <div className="absolute inset-0 backface-hidden rotate-y-180 rounded-3xl bg-[#878568] p-6 flex flex-col justify-between shadow-2xl border border-white/10 select-none">
+                    {/* Visual marker if already completed */}
+                    {currentCardIndex < maxCardIndexReached && (
+                      <div className="w-full flex justify-center mb-1 flex-shrink-0">
+                        {currentRoundResults[cardsDeck[currentCardIndex]?.id] === 'correct' ? (
+                          <span className="text-emerald-200 border border-emerald-400/30 text-[1.4vh] px-4 py-1 rounded-full uppercase tracking-widest font-black bg-[#757356]">
+                            Пройдено • Помню
+                          </span>
+                        ) : (
+                          <span className="text-rose-200 border border-rose-400/30 text-[1.4vh] px-4 py-1 rounded-full uppercase tracking-widest font-black bg-[#757356]">
+                            Пройдено • Не помню
+                          </span>
+                        )}
                       </div>
-                    </div>
+                    )}
+                    <div className="flex-grow flex flex-col justify-center items-center p-4 min-h-0">
+                      {(() => {
+                        const targetSide = cardsDeck[currentCardIndex]?.targetSide;
+                        const v = cardsDeck[currentCardIndex]?.verse;
+                        if (!v) return null;
 
-                    <div className="flex-1 flex flex-col justify-center gap-3 overflow-y-auto py-4 custom-scrollbar">
-                      {cardsDeck[currentCardIndex]?.targetSide === 'address_by_text' ? (
-                        <div className="text-center w-full">
-                          <h3 className="text-[3.2vh] font-bold text-[#d5ccab] tracking-wide mb-1 leading-tight">
-                            {cardsDeck[currentCardIndex]?.verse.book}
-                          </h3>
-                          <p className="text-[2.6vh] font-light text-[#d5ccab]/80 mb-4">
-                            Глава {cardsDeck[currentCardIndex]?.verse.chapter}, Стих {cardsDeck[currentCardIndex]?.verse.verse}
-                          </p>
-                          <p className="text-[2.2vh] leading-relaxed text-[#d5ccab] text-center font-serif italic border-t border-[#d5ccab]/15 pt-3">
-                            "{cardsDeck[currentCardIndex]?.verse.text}"
-                          </p>
-                        </div>
-                      ) : (
-                        <div className="w-full">
-                          <p className="text-[2.2vh] leading-relaxed text-[#d5ccab] text-center font-serif italic border-[#d5ccab]/15 pb-3 mb-2">
-                            "{cardsDeck[currentCardIndex]?.verse.text}"
-                          </p>
-                          <p className="text-[1.8vh] text-[#d5ccab]/80 text-center font-light mt-1">
-                            {cardsDeck[currentCardIndex]?.verse.book} {cardsDeck[currentCardIndex]?.verse.chapter}:{cardsDeck[currentCardIndex]?.verse.verse}
-                          </p>
-                        </div>
-                      )}
-                      
-                      <div className="w-full mt-2 pt-2 border-t border-white/10">
-                        <h4 className="text-[1.5vh] uppercase tracking-[0.1em] text-[#d5ccab]/70 font-semibold mb-1">Смысл:</h4>
-                        {cardsDeck[currentCardIndex]?.verse.reason && cardsDeck[currentCardIndex]?.verse.reason.map((r, ri) => (
-                          <p key={ri} className="text-[1.7vh] text-[#d5ccab] leading-tight font-light mb-1">
-                            • {r}
-                          </p>
-                        ))}
-                      </div>
-                    </div>
-
-                    {/* Звездочки оценки знания */}
-                    {(() => {
-                      const v = cardsDeck[currentCardIndex]?.verse;
-                      const targetSide = cardsDeck[currentCardIndex]?.targetSide;
-                      if (!v || !targetSide) return null;
-                      const currentRating = cardRatings[`${v.id}_${targetSide}`] || 0;
-
-                      return (
-                        <div 
-                          className="flex flex-col items-center gap-1.5 select-none self-center bg-[#878568] py-1 px-3 rounded-full border border-white/10"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                          }}
-                        >
-                          <div className="flex gap-2">
-                            {[1, 2, 3].map((starVal) => {
-                              const isStarred = currentRating >= starVal;
-                              return (
-                                <button
-                                  key={starVal}
-                                  type="button"
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    handleSetRating(String(v.id), targetSide, starVal);
-                                  }}
-                                  className="p-0.5 transition-transform active:scale-95 hover:scale-110"
-                                >
-                                  {isStarred ? (
-                                    <svg className="h-[3.2vh] w-[3.2vh] fill-amber-300 stroke-amber-400 drop-shadow" viewBox="0 0 24 24">
-                                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5" d="M11.48 3.499c.3-.921 1.603-.921 1.902 0l1.519 4.674a1 1 0 00.95.69h4.915c.969 0 1.371 1.24.588 1.81l-3.976 2.888a1 1 0 00-.363 1.118l1.518 4.674c.3.922-.755 1.688-1.538 1.118l-3.976-2.888a1 1 0 00-1.176 0l-3.976 2.888c-.783.57-1.838-.197-1.538-1.118l1.518-4.674a1 1 0 00-.363-1.118l-3.976-2.888c-.784-.57-.38-1.81.588-1.81h4.914a1 1 0 00.951-.69l1.519-4.674z" />
-                                    </svg>
-                                  ) : (
-                                    <svg className="h-[3.2vh] w-[3.2vh] fill-transparent stroke-[#d5ccab]/40" viewBox="0 0 24 24">
-                                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5" d="M11.48 3.499c.3-.921 1.603-.921 1.902 0l1.519 4.674a1 1 0 00.95.69h4.915c.969 0 1.371 1.24.588 1.81l-3.976 2.888a1 1 0 00-.363 1.118l1.518 4.674c.3.922-.755 1.688-1.538 1.118l-3.976-2.888a1 1 0 00-1.176 0l-3.976 2.888c-.783.57-1.838-.197-1.538-1.118l1.518-4.674a1 1 0 00-.363-1.118l-3.976-2.888c-.784-.57-.38-1.81.588-1.81h4.914a1 1 0 00.951-.69l1.519-4.674z" />
-                                    </svg>
-                                  )}
-                                </button>
-                              );
-                            })}
-                          </div>
-                        </div>
-                      );
-                    })()}
-
-                    <div className="text-center text-[1.6vh] tracking-widest uppercase text-[#d5ccab]/50 font-medium pt-2">
-                      Нажмите, чтобы повернуть обратно
+                        if (targetSide === 'address_by_text') {
+                          return (
+                            <div className="text-center flex flex-col items-center justify-center h-full">
+                              <h3 className="text-[5vh] sm:text-[5.5vh] font-black text-[#d5ccab] tracking-wide leading-tight">
+                                {v.book}.{v.chapter}:{v.verse}
+                              </h3>
+                            </div>
+                          );
+                        } else {
+                          return (
+                            <div className="text-center flex flex-col items-center justify-center h-full max-h-[42vh] overflow-y-auto custom-scrollbar p-2">
+                              <p className="text-[3vh] sm:text-[3.3vh] leading-relaxed text-[#d5ccab] text-center font-serif italic font-semibold">
+                                "{v.text}"
+                              </p>
+                            </div>
+                          );
+                        }
+                      })()}
                     </div>
                   </div>
 
                 </div>
-              </div>
-            </div>
-
-            {/* Answer Control triggers */}
-            <div className="h-[12vh]">
-              <AnimatePresence mode="wait">
-                {!isFlipped ? (
-                  <motion.div 
-                    key="hint"
-                    initial={{ opacity: 0, y: 5 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    exit={{ opacity: 0, y: -5 }}
-                    className="h-full flex items-center justify-center"
-                  >
-                    <p className="text-[2.2vh] font-light text-[#505143] text-center">
-                      Переверните карточку для ответа
-                    </p>
-                  </motion.div>
-                ) : (
-                  <motion.div 
-                    key="feedback"
-                    initial={{ opacity: 0, y: 15 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    exit={{ opacity: 0, y: -15 }}
-                    className="h-full flex gap-4 items-center"
-                  >
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        handleCardFeedback(false);
-                      }}
-                      className="flex-1 h-[10vh] rounded-2xl bg-rose-50 border border-rose-200 text-rose-700 hover:bg-rose-100 flex items-center justify-center gap-2 active:scale-95 transition-transform"
-                    >
-                      <svg className="h-[3vh] w-[3vh] fill-rose-700" viewBox="0 0 384 512">
-                        <path d="M342.6 150.6c12.5-12.5 12.5-32.8 0-45.3s-32.8-12.5-45.3 0L192 210.7 86.6 105.4c-12.5-12.5-32.8-12.5-45.3 0s-12.5 32.8 0 45.3L146.7 256 41.4 361.4c-12.5 12.5-12.5 32.8 0 45.3s32.8 12.5 45.3 0L192 301.3 297.4 406.6c12.5 12.5 32.8 12.5 45.3 0s12.5-32.8 0-45.3L237.3 256 342.6 150.6z"/>
-                      </svg>
-                      <span className="text-[2.2vh] font-bold">Не помню</span>
-                    </button>
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        handleCardFeedback(true);
-                      }}
-                      className="flex-1 h-[10vh] rounded-2xl bg-emerald-50 border border-emerald-200 text-emerald-800 hover:bg-emerald-100 flex items-center justify-center gap-2 active:scale-95 transition-transform"
-                    >
-                      <svg className="h-[3vh] w-[3vh] fill-emerald-800" viewBox="0 0 448 512">
-                        <path d="M438.6 150.6c12.5-12.5 12.5-32.8 0-45.3s-32.8-12.5-45.3 0L160 338.7 54.6 233.4c-12.5-12.5-32.8-12.5-45.3 0s-12.5 32.8 0 45.3l128 128c12.5 12.5 32.8 12.5 45.3 0l256-256z"/>
-                      </svg>
-                      <span className="text-[2.2vh] font-bold">Помню!</span>
-                    </button>
-                  </motion.div>
-                )}
-              </AnimatePresence>
+              </motion.div>
             </div>
           </motion.div>
         )}
@@ -1129,8 +1194,15 @@ export function CardsDashboard({
             key="summary"
             initial={{ opacity: 0, scale: 0.9 }}
             animate={{ opacity: 1, scale: 1 }}
-            className="flex-1 p-6 flex flex-col justify-between overflow-hidden"
+            className="flex-1 flex flex-col min-h-0"
           >
+            <div className="flex h-[10vh] min-h-[10vh] items-center justify-center border-b border-[#a3a289]/10 px-6 flex-shrink-0">
+              <div className="text-[3.5vh] font-bold text-[#878568]">
+                Повторение
+              </div>
+            </div>
+
+            <div className="flex-1 p-6 flex flex-col justify-between overflow-hidden">
             <div className="flex-1 flex flex-col min-h-0">
               {/* Celeb Stats header */}
               <div className="text-center mb-6">
@@ -1208,9 +1280,42 @@ export function CardsDashboard({
                 <p><strong>• Повторить раунд:</strong> перезапустит тренировку для дополнительного закрепления материала (ваши интервалы повторения при этом не изменятся).</p>
               </div>
             </div>
+            </div>
           </motion.div>
         )}
       </AnimatePresence>
+
+      {/* STANDARD BOTTOM FOOTER */}
+      <div 
+        onClick={() => {
+          if (viewState === 'game') {
+            setAppDialog({
+              title: 'Выйти из раунда?',
+              message: 'Вы действительно хотите прервать текущий раунд? Прогресс раунда не будет зафиксирован.',
+              type: 'confirm',
+              onConfirm: () => {
+                setViewState('setup');
+              }
+            });
+          } else if (viewState === 'summary') {
+            setViewState('setup');
+          } else if (viewState === 'settings') {
+            setViewState('setup');
+          } else {
+            onBack();
+          }
+        }}
+        className="flex h-[10vh] min-h-[10vh] cursor-pointer items-center border-t border-[#a3a289]/20"
+      >
+        <div className="flex h-[10vh] w-[10vh] items-center justify-center">
+          <svg className="h-[5vh] w-[5vh] fill-[#505143] opacity-20" viewBox="0 0 576 512">
+            <path d="M575.8 255.5c0 18-15 32.1-32 32.1l-32 0 .7 160.2c0 2.7-.2 5.4-.5 8.1l0 16.2c0 22.1-17.9 40-40 40l-16 0c-1.1 0-2.2 0-3.3-.1c-1.4 .1-2.8 .1-4.2 .1L416 512l-24 0c-22.1 0-40-17.9-40-40l0-24 0-64c0-17.7-14.3-32-32-32l-64 0c-17.7 0-32 14.3-32 32l0 64 0 24c0 22.1-17.9 40-40 40l-24 0-31.9 0c-1.5 0-3-.1-4.5-.2c-1.2 .1-2.4 .2-3.6 .2l-16 0c-22.1 0-40-17.9-40-40l0-112c0-.9 0-1.9 .1-2.8l0-69.7-32 0c-18 0-32-14-32-32.1c0-9 3-17 10-24L266.4 8c7-7 15-8 22-8s15 2 21 7L564.8 231.5c8 7 12 15 11 24z" />
+          </svg>
+        </div>
+        <div className="pl-4 text-[3vh] font-light text-[#505143] opacity-20">
+          {viewState === 'game' ? 'Выйти' : 'Вернуться'}
+        </div>
+      </div>
 
       {/* Dynamic Custom Dialog (Alert/Confirm) */}
       <AnimatePresence>
