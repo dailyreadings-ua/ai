@@ -1000,11 +1000,15 @@ export function CardsDashboard({
                     setIsFlipped(prev => !prev);
                   }
                 }}
-                animate={{
+                animate={exitX !== 0 ? {
                   x: exitX,
-                  rotate: exitX !== 0 ? exitRotate : dragX / 15,
-                  opacity: exitX !== 0 ? 0 : 1,
-                  scale: exitX !== 0 ? 0.9 : 1
+                  rotate: exitRotate,
+                  opacity: 0,
+                  scale: 0.9
+                } : {
+                  rotate: dragX / 15,
+                  opacity: 1,
+                  scale: 1
                 }}
                 transition={{
                   type: 'spring',
