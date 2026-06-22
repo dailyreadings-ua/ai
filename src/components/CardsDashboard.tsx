@@ -1051,13 +1051,13 @@ export function CardsDashboard({
                 )}
 
                 <div 
-                  className={`w-full h-full duration-500 preserve-3d relative transition-transform ${
+                  className={`w-full h-full duration-500 preserve-3d relative transition-transform touch-pan-y ${
                     isFlipped ? 'rotate-y-180' : ''
                   }`}
                 >
                   
                   {/* FRONT SIDE */}
-                  <div className="absolute inset-0 backface-hidden rounded-3xl bg-[#505143] p-6 flex flex-col justify-between shadow-2xl border border-[#a3a289]/10 select-none">
+                  <div className="absolute inset-0 backface-hidden rounded-3xl bg-[#505143] p-6 flex flex-col justify-between shadow-2xl border border-[#a3a289]/10 select-none touch-pan-y">
                     {/* Visual marker if already completed */}
                     {currentCardIndex < maxCardIndexReached && (
                       <div className="w-full flex justify-center mb-1 flex-shrink-0">
@@ -1072,7 +1072,7 @@ export function CardsDashboard({
                         )}
                       </div>
                     )}
-                    <div className="flex-grow flex flex-col items-center justify-center p-4 min-h-0">
+                    <div className="flex-grow flex flex-col items-center justify-center p-4 min-h-0 touch-pan-y">
                       {(() => {
                         const targetSide = cardsDeck[currentCardIndex]?.targetSide;
                         const v = cardsDeck[currentCardIndex]?.verse;
@@ -1080,16 +1080,16 @@ export function CardsDashboard({
 
                         if (targetSide === 'address_by_text') {
                           return (
-                            <div className="text-center flex flex-col items-center justify-center h-full max-h-[42vh] overflow-y-auto custom-scrollbar p-2">
-                              <p className="text-[2.8vh] sm:text-[3vh] leading-relaxed text-[#d5ccab] text-center font-serif italic">
+                            <div className="text-center flex flex-col items-center justify-center h-full max-h-[42vh] overflow-y-auto custom-scrollbar p-2 touch-pan-y">
+                              <p className="text-[2.8vh] sm:text-[3vh] leading-relaxed text-[#d5ccab] text-center font-serif italic touch-pan-y">
                                 "{v.text}"
                               </p>
                             </div>
                           );
                         } else {
                           return (
-                            <div className="text-center flex flex-col items-center justify-center h-full">
-                              <h3 className="text-[4.5vh] sm:text-[5vh] font-black text-[#d5ccab] tracking-wide leading-tight">
+                            <div className="text-center flex flex-col items-center justify-center h-full touch-pan-y">
+                              <h3 className="text-[4.5vh] sm:text-[5vh] font-black text-[#d5ccab] tracking-wide leading-tight touch-pan-y">
                                 {v.book}.{v.chapter}:{v.verse}
                               </h3>
                             </div>
@@ -1144,7 +1144,7 @@ export function CardsDashboard({
                   </div>
 
                   {/* BACK SIDE */}
-                  <div className="absolute inset-0 backface-hidden rotate-y-180 rounded-3xl bg-[#878568] p-6 flex flex-col justify-between shadow-2xl border border-white/10 select-none">
+                  <div className="absolute inset-0 backface-hidden rotate-y-180 rounded-3xl bg-[#878568] p-6 flex flex-col justify-between shadow-2xl border border-white/10 select-none touch-pan-y">
                     {/* Visual marker if already completed */}
                     {currentCardIndex < maxCardIndexReached && (
                       <div className="w-full flex justify-center mb-1 flex-shrink-0">
@@ -1159,7 +1159,7 @@ export function CardsDashboard({
                         )}
                       </div>
                     )}
-                    <div className="flex-grow flex flex-col justify-center items-center p-4 min-h-0">
+                    <div className="flex-grow flex flex-col justify-center items-center p-4 min-h-0 touch-pan-y">
                       {(() => {
                         const targetSide = cardsDeck[currentCardIndex]?.targetSide;
                         const v = cardsDeck[currentCardIndex]?.verse;
@@ -1167,16 +1167,16 @@ export function CardsDashboard({
 
                         if (targetSide === 'address_by_text') {
                           return (
-                            <div className="text-center flex flex-col items-center justify-center h-full">
-                              <h3 className="text-[5vh] sm:text-[5.5vh] font-black text-[#d5ccab] tracking-wide leading-tight">
+                            <div className="text-center flex flex-col items-center justify-center h-full touch-pan-y">
+                              <h3 className="text-[5vh] sm:text-[5.5vh] font-black text-[#d5ccab] tracking-wide leading-tight touch-pan-y">
                                 {v.book}.{v.chapter}:{v.verse}
                               </h3>
                             </div>
                           );
                         } else {
                           return (
-                            <div className="text-center flex flex-col items-center justify-center h-full max-h-[42vh] overflow-y-auto custom-scrollbar p-2">
-                              <p className="text-[3vh] sm:text-[3.3vh] leading-relaxed text-[#d5ccab] text-center font-serif italic font-semibold">
+                            <div className="text-center flex flex-col items-center justify-center h-full max-h-[42vh] overflow-y-auto custom-scrollbar p-2 touch-pan-y">
+                              <p className="text-[3vh] sm:text-[3.3vh] leading-relaxed text-[#d5ccab] text-center font-serif italic font-semibold touch-pan-y">
                                 "{v.text}"
                               </p>
                             </div>
