@@ -1057,7 +1057,9 @@ export function CardsDashboard({
                 >
                   
                   {/* FRONT SIDE */}
-                  <div className="absolute inset-0 backface-hidden rounded-3xl bg-[#505143] p-6 flex flex-col justify-between shadow-2xl border border-[#a3a289]/10 select-none touch-pan-y">
+                  <div className={`absolute inset-0 backface-hidden rounded-3xl bg-[#505143] p-6 flex flex-col justify-between shadow-2xl border border-[#a3a289]/10 select-none touch-pan-y ${
+                    isFlipped ? 'pointer-events-none' : ''
+                  }`}>
                     {/* Visual marker if already completed */}
                     {currentCardIndex < maxCardIndexReached && (
                       <div className="w-full flex justify-center mb-1 flex-shrink-0">
@@ -1144,7 +1146,9 @@ export function CardsDashboard({
                   </div>
 
                   {/* BACK SIDE */}
-                  <div className="absolute inset-0 backface-hidden rotate-y-180 rounded-3xl bg-[#878568] p-6 flex flex-col justify-between shadow-2xl border border-white/10 select-none touch-pan-y">
+                  <div className={`absolute inset-0 backface-hidden rotate-y-180 rounded-3xl bg-[#878568] p-6 flex flex-col justify-between shadow-2xl border border-white/10 select-none touch-pan-y ${
+                    !isFlipped ? 'pointer-events-none' : ''
+                  }`}>
                     {/* Visual marker if already completed */}
                     {currentCardIndex < maxCardIndexReached && (
                       <div className="w-full flex justify-center mb-1 flex-shrink-0">
