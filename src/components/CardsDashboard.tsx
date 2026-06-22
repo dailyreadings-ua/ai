@@ -959,7 +959,7 @@ export function CardsDashboard({
             </div>
 
             {/* 3D Flipping Card Container */}
-            <div className="flex-1 min-h-0 w-full max-w-md mx-auto flex items-stretch justify-center">
+            <div className="flex-1 min-h-0 w-full max-w-md mx-auto flex items-stretch justify-center touch-none">
               <motion.div 
                 key={cardsDeck[currentCardIndex]?.id}
                 drag={currentCardIndex === maxCardIndexReached ? "x" : false}
@@ -1020,7 +1020,7 @@ export function CardsDashboard({
                     setDragX(0);
                   }
                 }}
-                className={`w-full h-full min-h-0 perspective-1000 relative select-none ${
+                className={`w-full h-full min-h-0 perspective-1000 relative select-none touch-none ${
                   currentCardIndex === maxCardIndexReached ? 'cursor-grab active:cursor-grabbing' : 'cursor-pointer'
                 }`}
               >
