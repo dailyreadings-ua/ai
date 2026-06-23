@@ -1,26 +1,31 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="100%" height="100%">
-  <!-- Background with rounded corners -->
-  <rect width="512" height="512" rx="128" fill="#505143" />
-  
-  <!-- Subtle inner background glowing circle -->
-  <circle cx="256" cy="256" r="180" fill="#878568" opacity="0.3" />
-  
-  <!-- Open Book representation -->
-  <!-- Left page -->
-  <path d="M 240,160 C 200,165 150,155 120,170 L 120,340 C 150,325 200,335 240,330 Z" fill="#f2ebcf" />
-  <!-- Right page -->
-  <path d="M 272,160 C 312,165 362,155 392,170 L 392,340 C 362,325 312,335 272,330 Z" fill="#f2ebcf" />
-  
-  <!-- Spine Book line -->
-  <path d="M 256,165 L 256,335" stroke="#505143" stroke-width="6" stroke-linecap="round" />
-  
-  <!-- Ribbon bookmark -->
-  <path d="M 256,330 L 256,370 L 246,360 L 236,370 Z" fill="#e5c158" />
-  
-  <!-- Elegant cross or flame over pages to imply scripture readings -->
-  <path d="M 256,90 Q 240,125 256,150 Q 272,125 256,90 Z" fill="#e5c158" />
-  
-  <!-- Stylized scripture lines on pages for realistic look -->
-  <path d="M 140,200 H 220 M 140,230 H 210 M 140,260 H 220 M 140,290 H 190" stroke="#878568" stroke-width="4" stroke-linecap="round" opacity="0.7" />
-  <path d="M 292,200 H 372 M 292,230 H 362 M 292,260 H 372 M 292,290 H 342" stroke="#878568" stroke-width="4" stroke-linecap="round" opacity="0.7" />
+  <!-- Background -->
+  <rect width="512" height="512" fill="#d5ccab" />
+
+  <!-- 5 radiating lines at the top -->
+  <!-- Center is at (256, 256) -->
+  <line x1="256" y1="256" x2="51.6" y2="138" stroke="#505143" stroke-width="4.5" stroke-linecap="square" />
+  <line x1="256" y1="256" x2="138" y2="51.6" stroke="#505143" stroke-width="4.5" stroke-linecap="square" />
+  <line x1="256" y1="256" x2="256" y2="20" stroke="#505143" stroke-width="4.5" stroke-linecap="square" />
+  <line x1="256" y1="256" x2="374" y2="51.6" stroke="#505143" stroke-width="4.5" stroke-linecap="square" />
+  <line x1="256" y1="256" x2="460.4" y2="138" stroke="#505143" stroke-width="4.5" stroke-linecap="square" />
+
+  <!-- Horizontal bar -->
+  <rect x="38" y="245" width="436" height="22" fill="#505143" />
+
+  <!-- Cutout circle -->
+  <circle cx="256" cy="267" r="16" fill="#d5ccab" />
+
+  <!-- 5 dashed markers at the bottom -->
+  <!-- Center is at (256, 256), R1 = 175, R2 = 215 -->
+  <!-- Bottom-left-most (-60°) -->
+  <line x1="104.5" y1="343.5" x2="69.8" y2="363.5" stroke="#505143" stroke-width="15" stroke-linecap="square" />
+  <!-- Bottom-left-middle (-30°) -->
+  <line x1="168.5" y1="407.5" x2="148.5" y2="442.2" stroke="#505143" stroke-width="15" stroke-linecap="square" />
+  <!-- Bottom-center (0°) -->
+  <line x1="256" y1="431" x2="256" y2="471" stroke="#505143" stroke-width="15" stroke-linecap="square" />
+  <!-- Bottom-right-middle (+30°) -->
+  <line x1="343.5" y1="407.5" x2="363.5" y2="442.2" stroke="#505143" stroke-width="15" stroke-linecap="square" />
+  <!-- Bottom-right-most (+60°) -->
+  <line x1="407.5" y1="343.5" x2="442.2" y2="363.5" stroke="#505143" stroke-width="15" stroke-linecap="square" />
 </svg>

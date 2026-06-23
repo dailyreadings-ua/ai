@@ -1,6 +1,7 @@
 {
-  "name": "Daily Readings",
-  "short_name": "Readings",
+  "id": "daily-readings-ai",
+  "name": "Daily Readings AI",
+  "short_name": "Readings AI",
   "description": "Приложение для изучения текстов с использованием кривой забывания",
   "start_url": "/ai/",
   "display": "standalone",

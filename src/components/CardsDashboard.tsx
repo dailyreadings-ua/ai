@@ -1113,6 +1113,18 @@ export function CardsDashboard({
                           onClick={(e) => {
                             e.stopPropagation();
                           }}
+                          onPointerDown={(e) => {
+                            e.stopPropagation();
+                          }}
+                          onPointerUp={(e) => {
+                            e.stopPropagation();
+                          }}
+                          onTouchStart={(e) => {
+                            e.stopPropagation();
+                          }}
+                          onTouchEnd={(e) => {
+                            e.stopPropagation();
+                          }}
                         >
                           <div className="flex gap-2">
                             {[1, 2, 3].map((starVal) => {
