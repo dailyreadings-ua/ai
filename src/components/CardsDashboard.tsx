@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useLayoutEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { StudyingLesson, Verse, CardGameSettings, FundData } from '../types.ts';
 import { PHASE_TEXTS, getLessonStatusText, getDates } from '../constants.ts';
@@ -18,6 +18,66 @@ interface CardItem {
   lessonIndex: number;
   part: number;
   targetSide: 'address_by_text' | 'text_by_address';
+}
+
+interface AutoFittingTextProps {
+  text: string;
+  maxVh: number;
+  baseSizeVh: number;
+  minSizeVh?: number;
+  italic?: boolean;
+  fontWeight?: string;
+}
+
+function AutoFittingText({
+  text,
+  maxVh,
+  baseSizeVh,
+  minSizeVh = 1.4,
+  italic = true,
+  fontWeight = 'font-serif'
+}: AutoFittingTextProps) {
+  const containerRef = useRef<HTMLDivElement>(null);
+  const textRef = useRef<HTMLParagraphElement>(null);
+  const [fontSize, setFontSize] = useState(baseSizeVh);
+
+  useLayoutEffect(() => {
+    const container = containerRef.current;
+    const textEl = textRef.current;
+    if (!container || !textEl) return;
+
+    let currentVh = baseSizeVh;
+    textEl.style.fontSize = `${currentVh}vh`;
+
+    // Linear search down to minSizeVh
+    while (currentVh > minSizeVh) {
+      const isOverflowing = container.scrollHeight > container.clientHeight;
+      if (!isOverflowing) {
+        break;
+      }
+      currentVh -= 0.1;
+      textEl.style.fontSize = `${currentVh}vh`;
+    }
+
+    setFontSize(currentVh);
+    textEl.style.fontSize = '';
+  }, [text, baseSizeVh, minSizeVh]);
+
+  return (
+    <div 
+      ref={containerRef}
+      className="text-center flex flex-col items-center justify-center w-full h-full p-2 touch-pan-y overflow-hidden"
+      style={{ maxHeight: `${maxVh}vh` }}
+    >
+      <p 
+        ref={textRef}
+        style={{ fontSize: `${fontSize}vh` }}
+        className={`leading-relaxed text-[#d5ccab] text-center touch-pan-y ${fontWeight} ${italic ? 'italic' : ''}`}
+      >
+        "{text}"
+      </p>
+    </div>
+  );
 }
 
 export function CardsDashboard({ 
@@ -89,6 +149,67 @@ export function CardsDashboard({
     });
   };
 
+  const handleAutoRate = (verseId: string, side: 'address_by_text' | 'text_by_address', knows: boolean, elapsedSec: number) => {
+    let nextRating = 0;
+    setCardRatings(prev => {
+      const rKey = `${verseId}_${side}`;
+      const prevRating = prev[rKey] || 0;
+
+      if (!knows) {
+        if (prevRating === 0) {
+          nextRating = 1;
+        } else if (prevRating === 3) {
+          nextRating = 2;
+        } else if (prevRating === 2) {
+          nextRating = 1;
+        } else {
+          nextRating = 1;
+        }
+      } else {
+        if (elapsedSec <= 5.0) {
+          if (prevRating === 0) {
+            nextRating = 3;
+          } else if (prevRating === 1) {
+            nextRating = 2;
+          } else if (prevRating === 2) {
+            nextRating = 3;
+          } else {
+            nextRating = 3;
+          }
+        } else {
+          if (prevRating === 0) {
+            nextRating = 2;
+          } else if (prevRating === 1) {
+            nextRating = 2;
+          } else if (prevRating === 3) {
+            nextRating = 2;
+          } else {
+            nextRating = 2;
+          }
+        }
+      }
+
+      // If rating actually changed, trigger an animated feedback on the screen!
+      if (nextRating !== prevRating) {
+        setRatingFeedback({
+          direction: nextRating > prevRating ? 'up' : 'down',
+          prev: prevRating,
+          next: nextRating,
+          seconds: Number(elapsedSec.toFixed(1))
+        });
+      }
+
+      const next = { ...prev };
+      if (nextRating === 0) {
+        delete next[rKey];
+      } else {
+        next[rKey] = nextRating;
+      }
+      localStorage.setItem('dr_card_ratings', JSON.stringify(next));
+      return next;
+    });
+  };
+
   // Game active state
   const [cardsDeck, setCardsDeck] = useState<CardItem[]>([]);
   const [initialDeck, setInitialDeck] = useState<CardItem[]>([]);
@@ -103,6 +224,30 @@ export function CardsDashboard({
   const [isDragging, setIsDragging] = useState(false);
   const [correctCardIds, setCorrectCardIds] = useState<string[]>([]);
   const [incorrectCardIds, setIncorrectCardIds] = useState<string[]>([]);
+  const [cardShownTime, setCardShownTime] = useState<number>(0);
+  const [ratingFeedback, setRatingFeedback] = useState<{
+    direction: 'up' | 'down';
+    prev: number;
+    next: number;
+    seconds: number;
+  } | null>(null);
+
+  // Reset/start card shown timer when a new card is loaded on screen
+  useEffect(() => {
+    if (viewState === 'game' && cardsDeck[currentCardIndex]) {
+      setCardShownTime(Date.now());
+    }
+  }, [currentCardIndex, cardsDeck, viewState]);
+
+  // Clear rating feedback notification after a brief delay
+  useEffect(() => {
+    if (ratingFeedback) {
+      const timer = setTimeout(() => {
+        setRatingFeedback(null);
+      }, 2000);
+      return () => clearTimeout(timer);
+    }
+  }, [ratingFeedback]);
 
   // Dialog overlay state for custom alerts and confirms (safe for cross-origin iframe sandboxes)
   const [appDialog, setAppDialog] = useState<{
@@ -378,7 +523,16 @@ export function CardsDashboard({
     if (!currentCard) return;
     const cardId = currentCard.id;
     const id = String(currentCard.verse.id);
+    const targetSide = currentCard.targetSide;
     
+    // Calculate elapsed seconds since card was displayed
+    const elapsedSec = cardShownTime > 0 ? (Date.now() - cardShownTime) / 1000 : 0;
+    
+    // Automatically determine and update the card's rating (only during the first pass!)
+    if (retryPassCount === 0) {
+      handleAutoRate(id, targetSide, knows, elapsedSec);
+    }
+
     // Log failures / successes for current pass
     const updatedFailures = [...currentPassFailures];
     const updatedSuccesses = [...currentPassSuccesses];
@@ -855,8 +1009,38 @@ export function CardsDashboard({
             initial={{ opacity: 0, scale: 0.95 }}
             animate={{ opacity: 1, scale: 1 }}
             exit={{ opacity: 0, scale: 0.95 }}
-            className="flex-1 px-6 pt-6 pb-6 flex flex-col justify-between min-h-0"
+            className="flex-1 px-6 pt-6 pb-6 flex flex-col justify-between min-h-0 relative"
           >
+            {/* Animated Rating Feedback Overlay */}
+            <AnimatePresence>
+              {ratingFeedback && (
+                <motion.div
+                  initial={{ opacity: 0, y: -20, scale: 0.9 }}
+                  animate={{ opacity: 1, y: 0, scale: 1 }}
+                  exit={{ opacity: 0, y: -10, scale: 0.85 }}
+                  className="absolute top-[2.5vh] left-1/2 -translate-x-1/2 z-[60] pointer-events-none flex flex-col items-center w-max max-w-[90%]"
+                >
+                  <div className={`px-4 py-2.5 rounded-2xl shadow-xl border flex items-center gap-2.5 bg-opacity-95 backdrop-blur-md ${
+                    ratingFeedback.direction === 'up'
+                      ? 'bg-[#e6f4ea] border-emerald-500/30 text-[#137333] shadow-emerald-900/10'
+                      : 'bg-[#fce8e6] border-rose-500/30 text-[#c5221f] shadow-rose-900/10'
+                  }`}>
+                    <span className="text-[2.2vh]">
+                      {ratingFeedback.direction === 'up' ? '📈' : '📉'}
+                    </span>
+                    <div className="flex flex-col text-left">
+                      <span className="font-extrabold text-[1.6vh] leading-snug">
+                        {ratingFeedback.direction === 'up' ? 'Рейтинг повышен!' : 'Рейтинг понижен!'}
+                      </span>
+                      <span className="text-[1.3vh] opacity-90 leading-tight">
+                        Уровень {ratingFeedback.prev || 0} → {ratingFeedback.next} ({ratingFeedback.seconds} сек)
+                      </span>
+                    </div>
+                  </div>
+                </motion.div>
+              )}
+            </AnimatePresence>
+
             {/* Header progress info */}
             <div className="flex-shrink-0">
               <div className="flex items-center justify-between text-[1.8vh] text-[#878568] mb-2 font-medium">
@@ -1082,11 +1266,13 @@ export function CardsDashboard({
 
                         if (targetSide === 'address_by_text') {
                           return (
-                            <div className="text-center flex flex-col items-center justify-center h-full max-h-[42vh] overflow-y-auto custom-scrollbar p-2 touch-pan-y">
-                              <p className="text-[2.8vh] sm:text-[3vh] leading-relaxed text-[#d5ccab] text-center font-serif italic touch-pan-y">
-                                "{v.text}"
-                              </p>
-                            </div>
+                            <AutoFittingText 
+                              text={v.text}
+                              maxVh={42}
+                              baseSizeVh={3.0}
+                              fontWeight="font-serif"
+                              italic={true}
+                            />
                           );
                         } else {
                           return (
@@ -1109,46 +1295,23 @@ export function CardsDashboard({
 
                       return (
                         <div 
-                          className="flex flex-col items-center gap-1.5 select-none self-center bg-[#505143] py-1 px-3 rounded-full mb-1"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                          }}
-                          onPointerDown={(e) => {
-                            e.stopPropagation();
-                          }}
-                          onPointerUp={(e) => {
-                            e.stopPropagation();
-                          }}
-                          onTouchStart={(e) => {
-                            e.stopPropagation();
-                          }}
-                          onTouchEnd={(e) => {
-                            e.stopPropagation();
-                          }}
+                          className="flex items-center gap-2 select-none self-center bg-[#505143]/65 py-1.5 px-4 rounded-full mb-1 pointer-events-none"
                         >
                           <div className="flex gap-2">
                             {[1, 2, 3].map((starVal) => {
                               const isStarred = currentRating >= starVal;
                               return (
-                                <button
-                                  key={starVal}
-                                  type="button"
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    handleSetRating(String(v.id), targetSide, starVal);
-                                  }}
-                                  className="p-1 transition-all duration-200 active:scale-90 hover:scale-110"
-                                >
+                                <div key={starVal} className="p-0.5">
                                   {isStarred ? (
-                                    <svg className="h-[2.6vh] w-[2.6vh] fill-[#d5ccab] stroke-[#d5ccab]" viewBox="0 0 24 24">
+                                    <svg className="h-[2.4vh] w-[2.4vh] fill-[#d5ccab] stroke-[#d5ccab]" viewBox="0 0 24 24">
                                       <circle cx="12" cy="12" r="8" strokeWidth="2" />
                                     </svg>
                                   ) : (
-                                    <svg className="h-[2.6vh] w-[2.6vh] fill-transparent stroke-[#d5ccab]/40" viewBox="0 0 24 24">
+                                    <svg className="h-[2.4vh] w-[2.4vh] fill-transparent stroke-[#d5ccab]/40" viewBox="0 0 24 24">
                                       <circle cx="12" cy="12" r="8" strokeWidth="2" />
                                     </svg>
                                   )}
-                                </button>
+                                </div>
                               );
                             })}
                           </div>
@@ -1191,11 +1354,13 @@ export function CardsDashboard({
                           );
                         } else {
                           return (
-                            <div className="text-center flex flex-col items-center justify-center h-full max-h-[42vh] overflow-y-auto custom-scrollbar p-2 touch-pan-y">
-                              <p className="text-[3vh] sm:text-[3.3vh] leading-relaxed text-[#d5ccab] text-center font-serif italic font-semibold touch-pan-y">
-                                "{v.text}"
-                              </p>
-                            </div>
+                            <AutoFittingText 
+                              text={v.text}
+                              maxVh={42}
+                              baseSizeVh={3.3}
+                              fontWeight="font-serif font-semibold"
+                              italic={true}
+                            />
                           );
                         }
                       })()}
