@@ -40,42 +40,100 @@ function AutoFittingText({
   const containerRef = useRef<HTMLDivElement>(null);
   const textRef = useRef<HTMLParagraphElement>(null);
   const [fontSize, setFontSize] = useState(baseSizeVh);
+  const [containerHeight, setContainerHeight] = useState<number>(0);
+
+  // Monitor container size changes to re-run font fitting once element is fully laid out and sized
+  useEffect(() => {
+    const container = containerRef.current;
+    if (!container) return;
+
+    const observer = new ResizeObserver((entries) => {
+      for (const entry of entries) {
+        setContainerHeight(entry.contentRect.height);
+      }
+    });
+    observer.observe(container);
+    return () => observer.disconnect();
+  }, []);
 
   useLayoutEffect(() => {
     const container = containerRef.current;
     const textEl = textRef.current;
-    if (!container || !textEl) return;
-
-    let currentVh = baseSizeVh;
-    textEl.style.fontSize = `${currentVh}vh`;
-
-    // Linear search down to minSizeVh
-    while (currentVh > minSizeVh) {
-      const isOverflowing = container.scrollHeight > container.clientHeight;
-      if (!isOverflowing) {
-        break;
-      }
-      currentVh -= 0.1;
-      textEl.style.fontSize = `${currentVh}vh`;
+    if (!container || !textEl) {
+      setFontSize(baseSizeVh);
+      return;
     }
 
-    setFontSize(currentVh);
-    textEl.style.fontSize = '';
-  }, [text, baseSizeVh, minSizeVh]);
+    const clientHeight = container.clientHeight;
+    const clientWidth = container.clientWidth;
+
+    // If container is not yet visible or has zero/very small dimensions, don't run fitting yet
+    if (clientHeight <= 20 || clientWidth <= 20) {
+      setFontSize(baseSizeVh);
+      return;
+    }
+
+    const innerEl = textEl.parentElement;
+    if (!innerEl) {
+      setFontSize(baseSizeVh);
+      return;
+    }
+
+    // Клонируем весь внутренний контейнер со всеми паддингами и дочерними элементами
+    const testEl = innerEl.cloneNode(true) as HTMLDivElement;
+    testEl.style.position = 'absolute';
+    testEl.style.visibility = 'hidden';
+    testEl.style.zIndex = '-9999';
+    testEl.style.width = clientWidth + 'px';
+    testEl.style.left = '-9999px';
+    testEl.style.top = '-9999px';
+    testEl.style.height = 'auto';
+    testEl.style.maxHeight = 'none';
+
+    container.appendChild(testEl);
+
+    const testP = testEl.querySelector('p');
+    if (!testP) {
+      container.removeChild(testEl);
+      setFontSize(baseSizeVh);
+      return;
+    }
+
+    let size = baseSizeVh;
+    const minFontSize = minSizeVh;
+    const step = 0.1;
+
+    // Поступово зменшуємо розмір шрифту
+    while (size >= minFontSize) {
+      testP.style.fontSize = size + 'vh';
+      if (testEl.scrollHeight <= clientHeight) {
+        break;
+      }
+      size -= step;
+    }
+
+    // Прибираємо тимчасовий елемент
+    container.removeChild(testEl);
+
+    // Застосовуємо знайдений розмір шрифту
+    setFontSize(Math.max(minFontSize, size));
+  }, [text, baseSizeVh, minSizeVh, containerHeight]);
 
   return (
     <div 
       ref={containerRef}
-      className="text-center flex flex-col items-center justify-center w-full h-full p-2 touch-pan-y overflow-hidden"
+      className="flex-grow w-full h-full min-h-0 overflow-hidden flex flex-col justify-center items-center"
       style={{ maxHeight: `${maxVh}vh` }}
     >
-      <p 
-        ref={textRef}
-        style={{ fontSize: `${fontSize}vh` }}
-        className={`leading-relaxed text-[#d5ccab] text-center touch-pan-y ${fontWeight} ${italic ? 'italic' : ''}`}
-      >
-        "{text}"
-      </p>
+      <div className="w-full p-2 flex flex-col items-center justify-center text-center touch-pan-y">
+        <p 
+          ref={textRef}
+          style={{ fontSize: `${fontSize}vh` }}
+          className={`leading-[1.28] text-[#d5ccab] text-center touch-pan-y ${fontWeight} ${italic ? 'italic' : ''}`}
+        >
+          "{text}"
+        </p>
+      </div>
     </div>
   );
 }
@@ -105,7 +163,7 @@ export function CardsDashboard({
           what: parsed.what || 'both_address_first',
           retryMode: parsed.retryMode || 'until_learned',
           countMode: parsed.countMode || 'all',
-          maxCardsLimit: typeof parsed.maxCardsLimit === 'number' ? parsed.maxCardsLimit : 10
+          maxCardsLimit: (typeof parsed.maxCardsLimit === 'number' || parsed.maxCardsLimit === '') ? parsed.maxCardsLimit : 10
         };
       }
     } catch (e) {
@@ -166,7 +224,7 @@ export function CardsDashboard({
           nextRating = 1;
         }
       } else {
-        if (elapsedSec <= 5.0) {
+        if (elapsedSec <= 10.0) {
           if (prevRating === 0) {
             nextRating = 3;
           } else if (prevRating === 1) {
@@ -446,6 +504,15 @@ export function CardsDashboard({
 
   // Build the deck and start the round
   const handleStartGame = () => {
+    if (gameSettings.countMode === 'limit' && (gameSettings.maxCardsLimit === '' || Number(gameSettings.maxCardsLimit) <= 0)) {
+      setAppDialog({
+        title: 'Внимание',
+        message: 'Необходимо указать количество карточек для повторения (не менее 1)!',
+        type: 'alert'
+      });
+      return;
+    }
+
     const selectedVersesArray: Verse[] = [];
     const metaList: { chapter: number; part: number }[] = [];
 
@@ -963,8 +1030,17 @@ export function CardsDashboard({
                         max={100}
                         value={gameSettings.maxCardsLimit}
                         onChange={(e) => {
-                          const val = Math.max(1, parseInt(e.target.value) || 1);
-                          setGameSettings(prev => ({ ...prev, maxCardsLimit: val, countMode: 'limit' }));
+                          const raw = e.target.value;
+                          if (raw === '') {
+                            setGameSettings(prev => ({ ...prev, maxCardsLimit: '', countMode: 'limit' }));
+                          } else {
+                            const parsed = parseInt(raw, 10);
+                            setGameSettings(prev => ({ 
+                              ...prev, 
+                              maxCardsLimit: isNaN(parsed) ? '' : parsed, 
+                              countMode: 'limit' 
+                            }));
+                          }
                         }}
                         className="w-16 h-8 text-center bg-white border border-[#a3a289]/40 rounded-lg text-[#505143] font-bold text-[1.8vh] focus:outline-none focus:border-[#505143]" 
                       />
@@ -1269,9 +1345,9 @@ export function CardsDashboard({
                             <AutoFittingText 
                               text={v.text}
                               maxVh={42}
-                              baseSizeVh={3.0}
-                              fontWeight="font-serif"
-                              italic={true}
+                              baseSizeVh={4.2}
+                              fontWeight="font-sans font-semibold"
+                              italic={false}
                             />
                           );
                         } else {
@@ -1357,9 +1433,9 @@ export function CardsDashboard({
                             <AutoFittingText 
                               text={v.text}
                               maxVh={42}
-                              baseSizeVh={3.3}
-                              fontWeight="font-serif font-semibold"
-                              italic={true}
+                              baseSizeVh={4.2}
+                              fontWeight="font-sans font-semibold"
+                              italic={false}
                             />
                           );
                         }

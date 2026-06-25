@@ -25,7 +25,7 @@ export interface CardGameSettings {
   what: 'both_address_first' | 'only_address_by_text' | 'both_text_first' | 'only_text_by_address';
   retryMode: 'until_learned' | 'twice' | 'once' | 'none';
   countMode: 'all' | 'limit' | 'bad_only';
-  maxCardsLimit: number;
+  maxCardsLimit: number | '';
 }
 
 // Структура твоих JSON файлов
