@@ -223,23 +223,24 @@ export function MatchDashboard({ studyingLessons, onBack }: MatchDashboardProps)
     });
   };
 
-  // Helper to determine similar verses in selected deck
+  // Helper to determine similar verses in selected deck (exact user "старый код" getSimilar logic)
   const getSimilarVerses = (el: Verse, all: Verse[]): string[] => {
-    const results: string[] = [];
-    all.forEach(item => {
-      if (String(item.id) !== String(el.id)) {
-        if (item.book === el.book || item.chapter === el.chapter) {
-          results.push(String(item.id));
-        }
+    const sameBookArr = all.filter(curEl => curEl.book === el.book);
+    const resultArr: Verse[] = [];
+    sameBookArr.forEach(element => {
+      resultArr.push(element);
+    });
+    const idsArr: string[] = [];
+    resultArr.forEach(element => {
+      if (!idsArr.includes(String(element.id))) {
+        idsArr.push(String(element.id));
       }
     });
-    // Fallback: fill up to 2 random items
-    if (results.length === 0) {
-      const others = all.filter(item => String(item.id) !== String(el.id));
-      const shuffledOthers = shuffleArray(others);
-      shuffledOthers.slice(0, 2).forEach(item => results.push(String(item.id)));
+    const ind = idsArr.indexOf(String(el.id));
+    if (ind !== -1) {
+      idsArr.splice(ind, 1);
     }
-    return results;
+    return idsArr;
   };
 
   // Start Matching round with exact JS logic!

@@ -34,8 +34,8 @@ function AutoFittingText({
   maxVh,
   baseSizeVh,
   minSizeVh = 1.4,
-  italic = true,
-  fontWeight = 'font-serif'
+  italic = false,
+  fontWeight = 'font-sans font-semibold'
 }: AutoFittingTextProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const textRef = useRef<HTMLParagraphElement>(null);
