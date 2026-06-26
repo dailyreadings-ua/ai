@@ -33,6 +33,22 @@ export function LessonList({
     return () => clearInterval(timer);
   }, []);
 
+  const getLessonTitle = (lesson: any) => {
+    const lessonsWithinChapter = lessons.filter(l => l.chapter === lesson.chapter);
+    const indexWithinChapter = lessonsWithinChapter.findIndex(l => l.texts[0] === lesson.texts[0]);
+    let text = titles[lesson.chapter] || '';
+    if (indexWithinChapter > 0) {
+      if (lessonsWithinChapter.length - 1 === indexWithinChapter) {
+        text += ' (ОКОНЧАНИЕ)';
+      } else if (lessonsWithinChapter.length === 3) {
+        text += ' (ПРОДОЛЖЕНИЕ)';
+      } else if (lessonsWithinChapter.length > 3) {
+        text += ` (ПРОДОЛЖЕНИЕ ${indexWithinChapter}-Е)`;
+      }
+    }
+    return text;
+  };
+
   return (
     <motion.div
       initial={{ opacity: 0 }}
@@ -45,8 +61,8 @@ export function LessonList({
       </div>
 
       <div className="flex flex-1 flex-col overflow-y-auto overflow-x-hidden p-3 gap-3">
-        {titles.map((title, index) => {
-          const lessonVerses = lessons.filter(l => l.chapter === index).flatMap(l => l.texts).map(id => String(id));
+        {lessons.map((lesson, index) => {
+          const lessonVerses = lesson.texts.map(id => String(id));
           const totalInLesson = lessonVerses.length;
           const completedInLesson = lessonVerses.filter(id => completedIds.includes(id)).length;
           const progress = totalInLesson > 0 ? (completedInLesson / totalInLesson) * 100 : 0;
@@ -55,6 +71,8 @@ export function LessonList({
           const activeStudy = studyingLessons.find(
             s => s.lessonIndex === index && s.part === currentPart
           );
+
+          const title = getLessonTitle(lesson);
 
           return (
             <motion.div
@@ -69,7 +87,7 @@ export function LessonList({
                 className="flex items-start cursor-pointer"
               >
                 <div className="flex h-[5.5vh] w-[5.5vh] min-w-[5.5vh] items-center justify-center rounded-full bg-[#878568] text-[2.2vh] font-bold text-[#d5ccab] shadow-sm mt-0.5">
-                  {index + 1}
+                  {lesson.chapter + 1}
                 </div>
                 <div className="flex flex-1 flex-col pl-4">
                   <div className="text-[2.1vh] font-light leading-tight text-[#505143] uppercase break-words mb-1">

@@ -218,6 +218,10 @@ export default function App() {
           <MatchDashboard
             key="match_dashboard"
             studyingLessons={studyingLessons}
+            onSaveLessons={(updated) => {
+              setStudyingLessons(updated);
+              localStorage.setItem('dr_lessons', JSON.stringify(updated));
+            }}
             onBack={() => setView('FUNDAMENTALS_HOME')}
           />
         ) : view === 'STUDY' && fundData && currentLesson !== null ? (

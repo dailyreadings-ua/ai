@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useMemo, useLayoutEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
+import { X } from 'lucide-react';
 import { StudyingLesson, Verse, CardGameSettings, FundData } from '../types.ts';
 import { PHASE_TEXTS, getLessonStatusText, getDates } from '../constants.ts';
 
@@ -131,7 +132,7 @@ function AutoFittingText({
           style={{ fontSize: `${fontSize}vh` }}
           className={`leading-[1.28] text-[#d5ccab] text-center touch-pan-y ${fontWeight} ${italic ? 'italic' : ''}`}
         >
-          "{text}"
+          {text}
         </p>
       </div>
     </div>
@@ -312,6 +313,7 @@ export function CardsDashboard({
     title: string;
     message: string;
     type: 'alert' | 'confirm';
+    confirmText?: string;
     onConfirm?: () => void;
   } | null>(null);
 
@@ -383,9 +385,9 @@ export function CardsDashboard({
         ? (versesRaw as Verse[][]).flat() 
         : (versesRaw as Verse[]);
         
-      part1Data[2].forEach(lesson => {
+      part1Data[2].forEach((lesson, index) => {
         const lessonVerses = versesList.filter(v => lesson.texts.includes(Number(v.id)));
-        const key = `1-${lesson.chapter}`;
+        const key = `1-${index}`;
         const existing = map.get(key) || [];
         const merged = [...existing];
         lessonVerses.forEach(v => {
@@ -403,9 +405,9 @@ export function CardsDashboard({
         ? (versesRaw as Verse[][]).flat() 
         : (versesRaw as Verse[]);
         
-      part2Data[2].forEach(lesson => {
+      part2Data[2].forEach((lesson, index) => {
         const lessonVerses = versesList.filter(v => lesson.texts.includes(Number(v.id)));
-        const key = `2-${lesson.chapter}`;
+        const key = `2-${index}`;
         const existing = map.get(key) || [];
         const merged = [...existing];
         lessonVerses.forEach(v => {
@@ -425,6 +427,23 @@ export function CardsDashboard({
     setSelectedLessonKeys(prev => 
       prev.includes(key) ? prev.filter(k => k !== key) : [...prev, key]
     );
+  };
+
+  const handleRemoveLesson = (lessonToRemove: StudyingLesson) => {
+    setAppDialog({
+      title: 'Убрать из изучения?',
+      message: `Вы действительно хотите удалить урок "${lessonToRemove.title}" из списка изучаемых? Ваш прогресс по этому уроку будет сброшен.`,
+      type: 'confirm',
+      confirmText: 'Да, убрать',
+      onConfirm: () => {
+        const updated = studyingLessons.filter(
+          l => !(l.lessonIndex === lessonToRemove.lessonIndex && l.part === lessonToRemove.part)
+        );
+        onSaveLessons(updated);
+        const key = `${lessonToRemove.part}-${lessonToRemove.lessonIndex}`;
+        setSelectedLessonKeys(prev => prev.filter(k => k !== key));
+      }
+    });
   };
 
   // Launch Game setup config
@@ -850,38 +869,53 @@ export function CardsDashboard({
                       <div 
                         key={key}
                         onClick={() => handleToggleLessonSelection(key)}
-                        className={`flex items-center gap-4 rounded-2xl p-4 border transition-all cursor-pointer ${
+                        className={`relative flex items-center justify-between gap-4 rounded-2xl p-4 border transition-all cursor-pointer ${
                           isChecked 
                             ? 'bg-white border-[#878568] shadow-md' 
                             : 'bg-white/45 border-[#a3a289]/20 hover:bg-white/60'
                         }`}
                       >
-                        {/* Beautiful custom checkbox */}
-                        <div className={`h-[4vh] w-[4vh] min-w-[4vh] rounded-lg border-2 flex items-center justify-center transition-colors ${
-                          isChecked 
-                            ? 'bg-[#505143] border-[#505143]' 
-                            : 'border-[#a3a289] bg-transparent'
-                        }`}>
-                          {isChecked && (
-                            <svg className="h-[2vh] w-[2vh] fill-white" viewBox="0 0 448 512">
-                              <path d="M438.6 150.6c12.5-12.5 12.5-32.8 0-45.3s-32.8-12.5-45.3 0L160 338.7 54.6 233.4c-12.5-12.5-32.8-12.5-45.3 0s-12.5 32.8 0 45.3l128 128c12.5 12.5 32.8 12.5 45.3 0l256-256z"/>
-                            </svg>
-                          )}
+                        <div className="flex items-center gap-4 flex-1 min-w-0 pr-8">
+                          {/* Beautiful custom checkbox */}
+                          <div className={`h-[4vh] w-[4vh] min-w-[4vh] rounded-lg border-2 flex items-center justify-center transition-colors ${
+                            isChecked 
+                              ? 'bg-[#505143] border-[#505143]' 
+                              : 'border-[#a3a289] bg-transparent'
+                          }`}>
+                            {isChecked && (
+                              <svg className="h-[2vh] w-[2vh] fill-white" viewBox="0 0 448 512">
+                                <path d="M438.6 150.6c12.5-12.5 12.5-32.8 0-45.3s-32.8-12.5-45.3 0L160 338.7 54.6 233.4c-12.5-12.5-32.8-12.5-45.3 0s-12.5 32.8 0 45.3l128 128c12.5 12.5 32.8 12.5 45.3 0l256-256z"/>
+                              </svg>
+                            )}
+                          </div>
+
+                          {/* Text and status */}
+                          <div className="flex-1 flex flex-col min-w-0">
+                            <div className="text-[2.1vh] font-medium leading-tight text-[#505143] break-words">
+                              {lesson.title}
+                            </div>
+                            <div className="text-[1.5vh] text-[#a3a289] mt-0.5 font-light">
+                              Часть {lesson.part} • Этап {lesson.phase + 1}: {PHASE_TEXTS[lesson.phase]?.[0]}
+                            </div>
+                            {/* Live Countdown status */}
+                            <div className={`mt-2 text-[1.4vh] rounded-lg px-2.5 py-1 inline-flex w-fit items-center ${statusVal.bg} ${statusVal.color}`}>
+                              {statusVal.text}
+                            </div>
+                          </div>
                         </div>
 
-                        {/* Text and status */}
-                        <div className="flex-1 flex flex-col">
-                          <div className="text-[2.1vh] font-medium leading-tight text-[#505143] break-words">
-                            {lesson.title}
-                          </div>
-                          <div className="text-[1.5vh] text-[#a3a289] mt-0.5 font-light">
-                            Часть {lesson.part} • Этап {lesson.phase + 1}: {PHASE_TEXTS[lesson.phase]?.[0]}
-                          </div>
-                          {/* Live Countdown status */}
-                          <div className={`mt-2 text-[1.4vh] rounded-lg px-2.5 py-1 inline-flex w-fit items-center ${statusVal.bg} ${statusVal.color}`}>
-                            {statusVal.text}
-                          </div>
-                        </div>
+                        {/* Remove from studying button */}
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleRemoveLesson(lesson);
+                          }}
+                          className="absolute top-2 right-2 h-8 w-8 flex items-center justify-center rounded-lg text-[#a3a289] hover:text-rose-600 hover:bg-rose-50/50 active:scale-95 transition-all"
+                          title="Убрать из изучения"
+                        >
+                          <X className="h-5 w-5" />
+                        </button>
                       </div>
                     );
                   })}
@@ -1621,7 +1655,7 @@ export function CardsDashboard({
                       }}
                       className="flex-1 py-3 px-4 rounded-xl text-[1.8vh] font-bold text-[#d5ccab] bg-[#505143] hover:opacity-95 active:scale-97 transition-all shadow"
                     >
-                      Да, выйти
+                      {appDialog.confirmText || 'Да, выйти'}
                     </button>
                   </>
                 ) : (

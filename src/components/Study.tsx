@@ -37,6 +37,22 @@ export function Study({
     ? (versesRaw as Verse[][]).flat() 
     : (versesRaw as Verse[]);
 
+  const getLessonTitle = (lesson: any) => {
+    const lessonsWithinChapter = lessons.filter(l => l.chapter === lesson.chapter);
+    const indexWithinChapter = lessonsWithinChapter.findIndex(l => l.texts[0] === lesson.texts[0]);
+    let text = titles[lesson.chapter] || '';
+    if (indexWithinChapter > 0) {
+      if (lessonsWithinChapter.length - 1 === indexWithinChapter) {
+        text += ' (ОКОНЧАНИЕ)';
+      } else if (lessonsWithinChapter.length === 3) {
+        text += ' (ПРОДОЛЖЕНИЕ)';
+      } else if (lessonsWithinChapter.length > 3) {
+        text += ` (ПРОДОЛЖЕНИЕ ${indexWithinChapter}-Е)`;
+      }
+    }
+    return text;
+  };
+
   // Собираем все ID стихов
   const allVerseIds = useMemo(() => {
     if (mode === 'CARDS') {
@@ -44,9 +60,8 @@ export function Study({
       return lessons.flatMap(l => l.texts);
     }
     // Только тексты выбранного урока
-    return lessons
-      .filter(l => l.chapter === lessonIndex)
-      .flatMap(l => l.texts);
+    const selectedLesson = lessons[lessonIndex];
+    return selectedLesson ? selectedLesson.texts : [];
   }, [lessons, lessonIndex, mode]);
     
   const totalVersesInSession = allVerseIds.length;
@@ -99,7 +114,7 @@ export function Study({
       </div>
 
       <div className="text-center text-[3.5vh] font-bold text-[#878568] mb-6 leading-tight">
-        {mode === 'CARDS' ? 'Все карточки' : titles[lessonIndex]}
+        {mode === 'CARDS' ? 'Все карточки' : (lessons[lessonIndex] ? getLessonTitle(lessons[lessonIndex]) : '')}
       </div>
 
       <div className="flex-1">
