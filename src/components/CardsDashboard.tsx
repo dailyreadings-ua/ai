@@ -1370,161 +1370,162 @@ export function CardsDashboard({
                     Запустить карточки ({selectedLessonKeys.length})
                   </button>
                 </div>
-
-                {/* Modal for adding custom lessons */}
-                <AnimatePresence>
-                  {isModalOpen && (
-                    <div className="fixed inset-0 bg-black/45 backdrop-blur-md z-50 flex items-center justify-center p-4">
-                      <motion.div 
-                        initial={{ opacity: 0, scale: 0.95 }}
-                        animate={{ opacity: 1, scale: 1 }}
-                        exit={{ opacity: 0, scale: 0.95 }}
-                        className="bg-[#d5ccab] rounded-2xl border-2 border-[#878568] w-full max-w-lg max-h-[85vh] flex flex-col shadow-2xl overflow-hidden"
-                      >
-                        {/* Modal Header */}
-                        <div className="p-4 border-b border-[#a3a289]/20 flex items-center justify-between bg-[#878568]/15">
-                          <span className="text-[2.2vh] font-bold text-[#505143]">
-                            {editingGroupId ? 'Редактировать группу' : 'Добавить уроки'}
-                          </span>
-                          <button
-                            type="button"
-                            onClick={() => {
-                              setIsModalOpen(false);
-                              setEditingGroupId(null);
-                            }}
-                            className="h-8 w-8 rounded-lg flex items-center justify-center text-[#505143] hover:bg-black/5 active:scale-95 transition-all"
-                          >
-                            <X className="h-5 w-5" />
-                          </button>
-                        </div>
-
-                        {/* Part Selector Tabs */}
-                        <div className="flex border-b border-[#a3a289]/10 bg-white/35">
-                          <button
-                            type="button"
-                            onClick={() => setModalPart(1)}
-                            className={`flex-1 py-3 text-[1.8vh] font-bold transition-all ${
-                              modalPart === 1 
-                                ? 'text-[#505143] border-b-2 border-[#505143] bg-white' 
-                                : 'text-[#878568] hover:bg-white/20'
-                            }`}
-                          >
-                            Часть 1
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => setModalPart(2)}
-                            className={`flex-1 py-3 text-[1.8vh] font-bold transition-all ${
-                              modalPart === 2 
-                                ? 'text-[#505143] border-b-2 border-[#505143] bg-white' 
-                                : 'text-[#878568] hover:bg-white/20'
-                            }`}
-                          >
-                            Часть 2
-                          </button>
-                        </div>
-
-                        {/* Select All / Deselect All */}
-                        <div className="px-4 py-2 bg-white/20 border-b border-[#a3a289]/10 flex justify-between gap-2">
-                          <button
-                            type="button"
-                            onClick={() => {
-                              const titles = modalPart === 1 ? part1LessonTitles : part2LessonTitles;
-                              if (titles) {
-                                const currentPartSelected = titles.map((title, index) => ({ part: modalPart, index, title }));
-                                setModalSelected(prev => {
-                                  const otherParts = prev.filter(item => item.part !== modalPart);
-                                  return [...otherParts, ...currentPartSelected];
-                                });
-                              }
-                            }}
-                            className="text-[1.5vh] font-bold text-[#505143] hover:underline"
-                          >
-                            Выбрать все
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => {
-                              setModalSelected(prev => prev.filter(item => item.part !== modalPart));
-                            }}
-                            className="text-[1.5vh] font-bold text-[#878568] hover:underline"
-                          >
-                            Снять выделение
-                          </button>
-                        </div>
-
-                        {/* Lesson List */}
-                        <div className="flex-1 overflow-y-auto p-4 flex flex-col gap-2.5 custom-scrollbar bg-white/45">
-                          {((modalPart === 1 ? part1LessonTitles : part2LessonTitles) || []).map((title: string, index: number) => {
-                            const isSelected = modalSelected.some(item => item.part === modalPart && item.index === index);
-                            return (
-                              <div
-                                key={index}
-                                onClick={() => {
-                                  setModalSelected(prev => {
-                                    const exists = prev.some(item => item.part === modalPart && item.index === index);
-                                    if (exists) {
-                                      return prev.filter(item => !(item.part === modalPart && item.index === index));
-                                    } else {
-                                      return [...prev, { part: modalPart, index, title }];
-                                    }
-                                  });
-                                }}
-                                className={`flex items-center gap-3 rounded-xl p-3 border cursor-pointer transition-all ${
-                                  isSelected 
-                                    ? 'bg-white border-[#505143] shadow-sm' 
-                                    : 'bg-white/30 border-transparent hover:bg-white/60'
-                                }`}
-                              >
-                                {/* Miniature Checkbox */}
-                                <div className={`h-6 w-6 rounded-md border flex items-center justify-center flex-shrink-0 transition-colors ${
-                                  isSelected ? 'bg-[#505143] border-[#505143]' : 'border-[#a3a289] bg-transparent'
-                                }`}>
-                                  {isSelected && (
-                                    <svg className="h-3 w-3 fill-white" viewBox="0 0 448 512">
-                                      <path d="M438.6 150.6c12.5-12.5 12.5-32.8 0-45.3s-32.8-12.5-45.3 0L160 338.7 54.6 233.4c-12.5-12.5-32.8-12.5-45.3 0s-12.5 32.8 0 45.3l128 128c12.5 12.5 32.8 12.5 45.3 0l256-256z"/>
-                                    </svg>
-                                  )}
-                                </div>
-                                <span className="text-[1.8vh] leading-tight text-[#505143] font-medium">{title}</span>
-                              </div>
-                            );
-                          })}
-                        </div>
-
-                        {/* Modal Footer */}
-                        <div className="p-4 border-t border-[#a3a289]/20 flex gap-3 bg-[#878568]/10">
-                          <button
-                            type="button"
-                            onClick={() => {
-                              setIsModalOpen(false);
-                              setEditingGroupId(null);
-                            }}
-                            className="flex-1 py-3 px-4 rounded-xl text-[1.8vh] font-bold text-[#505143] bg-white/55 border border-[#a3a289]/35 hover:bg-white/80 active:scale-97 transition-all"
-                          >
-                            Отмена
-                          </button>
-                          <button
-                            type="button"
-                            disabled={modalSelected.length === 0}
-                            onClick={() => {
-                              handleAddCustomGroup(modalSelected);
-                            }}
-                            className={`flex-1 py-3 px-4 rounded-xl text-[1.8vh] font-bold transition-all shadow ${
-                              modalSelected.length > 0 
-                                ? 'bg-[#505143] text-[#d5ccab] hover:opacity-95 active:scale-97 cursor-pointer' 
-                                : 'bg-[#a3a289]/40 text-[#505143]/40 cursor-not-allowed'
-                            }`}
-                          >
-                            {editingGroupId ? 'Сохранить' : 'Добавить'}
-                          </button>
-                        </div>
-                      </motion.div>
-                    </div>
-                  )}
-                </AnimatePresence>
               </div>
             )}
+
+            {/* Modal for adding custom lessons */}
+            <AnimatePresence>
+              {isModalOpen && (
+                <div className="absolute inset-0 z-50 flex items-end justify-center bg-black/40 p-4">
+                  <motion.div
+                    initial={{ y: '100%' }}
+                    animate={{ y: 0 }}
+                    exit={{ y: '100%' }}
+                    transition={{ type: 'spring', damping: 25, stiffness: 220 }}
+                    className="w-full max-w-lg bg-[#d5ccab] rounded-t-3xl shadow-2xl border-t border-[#a3a289]/30 flex flex-col max-h-[85vh]"
+                  >
+                    {/* Modal Header */}
+                    <div className="p-4 border-b border-[#a3a289]/20 flex items-center justify-between bg-[#878568]/15">
+                      <span className="text-[2.2vh] font-bold text-[#505143]">
+                        {editingGroupId ? 'Редактировать группу' : 'Добавить уроки'}
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setIsModalOpen(false);
+                          setEditingGroupId(null);
+                        }}
+                        className="h-8 w-8 rounded-lg flex items-center justify-center text-[#505143] hover:bg-black/5 active:scale-95 transition-all"
+                      >
+                        <X className="h-5 w-5" />
+                      </button>
+                    </div>
+
+                    {/* Part Select tab buttons */}
+                    <div className="flex border-b border-[#a3a289]/10 bg-white/10">
+                      <button
+                        type="button"
+                        onClick={() => setModalPart(1)}
+                        className={`flex-1 py-3 text-[1.8vh] font-bold text-center transition-all border-b-2 ${
+                          modalPart === 1 
+                            ? 'border-[#505143] text-[#505143] bg-white/20' 
+                            : 'border-transparent text-[#878568] hover:text-[#505143]'
+                        }`}
+                      >
+                        Часть 1
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setModalPart(2)}
+                        className={`flex-1 py-3 text-[1.8vh] font-bold text-center transition-all border-b-2 ${
+                          modalPart === 2 
+                            ? 'border-[#505143] text-[#505143] bg-white/20' 
+                            : 'border-transparent text-[#878568] hover:text-[#505143]'
+                        }`}
+                      >
+                        Часть 2
+                      </button>
+                    </div>
+
+                    {/* Select All / Deselect All */}
+                    <div className="px-4 py-2 bg-white/20 border-b border-[#a3a289]/10 flex justify-between gap-2">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const titles = modalPart === 1 ? part1LessonTitles : part2LessonTitles;
+                          if (titles) {
+                            const currentPartSelected = titles.map((title, index) => ({ part: modalPart, index, title }));
+                            setModalSelected(prev => {
+                              const otherParts = prev.filter(item => item.part !== modalPart);
+                              return [...otherParts, ...currentPartSelected];
+                            });
+                          }
+                        }}
+                        className="text-[1.5vh] font-bold text-[#505143] hover:underline"
+                      >
+                        Выбрать все
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setModalSelected(prev => prev.filter(item => item.part !== modalPart));
+                        }}
+                        className="text-[1.5vh] font-bold text-[#878568] hover:underline"
+                      >
+                        Снять выделение
+                      </button>
+                    </div>
+
+                    {/* Lesson List */}
+                    <div className="flex-1 overflow-y-auto p-4 flex flex-col gap-2.5 custom-scrollbar bg-white/45">
+                      {((modalPart === 1 ? part1LessonTitles : part2LessonTitles) || []).map((title: string, index: number) => {
+                        const isSelected = modalSelected.some(item => item.part === modalPart && item.index === index);
+                        return (
+                          <div
+                            key={index}
+                            onClick={() => {
+                              setModalSelected(prev => {
+                                const exists = prev.some(item => item.part === modalPart && item.index === index);
+                                if (exists) {
+                                  return prev.filter(item => !(item.part === modalPart && item.index === index));
+                                } else {
+                                  return [...prev, { part: modalPart, index, title }];
+                                }
+                              });
+                            }}
+                            className={`flex items-center gap-3 rounded-xl p-3 border cursor-pointer transition-all ${
+                              isSelected 
+                                ? 'bg-white border-[#505143] shadow-sm' 
+                                : 'bg-white/30 border-transparent hover:bg-white/60'
+                            }`}
+                          >
+                            {/* Miniature Checkbox */}
+                            <div className={`h-6 w-6 rounded-md border flex items-center justify-center flex-shrink-0 transition-colors ${
+                              isSelected ? 'bg-[#505143] border-[#505143]' : 'border-[#a3a289] bg-transparent'
+                            }`}>
+                              {isSelected && (
+                                <svg className="h-3 w-3 fill-white" viewBox="0 0 448 512">
+                                  <path d="M438.6 150.6c12.5-12.5 12.5-32.8 0-45.3s-32.8-12.5-45.3 0L160 338.7 54.6 233.4c-12.5-12.5-32.8-12.5-45.3 0s-12.5 32.8 0 45.3l128 128c12.5 12.5 32.8 12.5 45.3 0l256-256z"/>
+                                </svg>
+                              )}
+                            </div>
+                            <span className="text-[1.8vh] leading-tight text-[#505143] font-medium">{title}</span>
+                          </div>
+                        );
+                      })}
+                    </div>
+
+                    {/* Modal Footer */}
+                    <div className="p-4 border-t border-[#a3a289]/20 flex gap-3 bg-[#878568]/10">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setIsModalOpen(false);
+                          setEditingGroupId(null);
+                        }}
+                        className="flex-1 py-3 px-4 rounded-xl text-[1.8vh] font-bold text-[#505143] bg-white/55 border border-[#a3a289]/35 hover:bg-white/80 active:scale-97 transition-all"
+                      >
+                        Отмена
+                      </button>
+                      <button
+                        type="button"
+                        disabled={modalSelected.length === 0}
+                        onClick={() => {
+                          handleAddCustomGroup(modalSelected);
+                        }}
+                        className={`flex-1 py-3 px-4 rounded-xl text-[1.8vh] font-bold transition-all shadow ${
+                          modalSelected.length > 0 
+                            ? 'bg-[#505143] text-[#d5ccab] hover:opacity-95 active:scale-97 cursor-pointer' 
+                            : 'bg-[#a3a289]/40 text-[#505143]/40 cursor-not-allowed'
+                        }`}
+                      >
+                        {editingGroupId ? 'Сохранить' : 'Добавить'}
+                      </button>
+                    </div>
+                  </motion.div>
+                </div>
+              )}
+            </AnimatePresence>
           </motion.div>
         )}
 
