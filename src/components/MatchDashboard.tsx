@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Clock, Trophy, Play, RotateCcw, AlertTriangle, ArrowLeft, X } from 'lucide-react';
+import { Clock, Trophy, Play, RotateCcw, AlertTriangle, ArrowLeft, X, Pencil } from 'lucide-react';
 import { Verse, StudyingLesson } from '../types.ts';
 import { PHASE_TEXTS, getLessonStatusText } from '../constants.ts';
 
@@ -9,6 +9,142 @@ interface MatchDashboardProps {
   onSaveLessons?: (updated: StudyingLesson[]) => void;
   onBack: () => void;
   key?: React.Key;
+}
+
+interface SelectedLessonItem {
+  part: number;
+  index: number;
+  title: string;
+}
+
+interface CustomLessonGroup {
+  id: string;
+  title: string;
+  lessons: SelectedLessonItem[];
+  count: number;
+}
+
+function getBaseTopic(title: string): string {
+  return title.replace(/\s*\((?:Продолжение|продолжение|Окончание|окончание).*\)$/i, '').trim();
+}
+
+function getLessonTitleFromData(lesson: any, lessons: any[], titles: string[]): string {
+  const lessonsWithinChapter = lessons.filter(l => l.chapter === lesson.chapter);
+  const indexWithinChapter = lessonsWithinChapter.findIndex(l => l.texts[0] === lesson.texts[0]);
+  let text = titles[lesson.chapter] || '';
+  if (indexWithinChapter > 0) {
+    if (lessonsWithinChapter.length - 1 === indexWithinChapter) {
+      text += ' (ОКОНЧАНИЕ)';
+    } else if (lessonsWithinChapter.length === 3) {
+      text += ' (ПРОДОЛЖЕНИЕ)';
+    } else if (lessonsWithinChapter.length > 3) {
+      text += ` (ПРОДОЛЖЕНИЕ ${indexWithinChapter}-Е)`;
+    }
+  }
+  return text;
+}
+
+function getLessonsPlural(count: number): string {
+  const mod10 = count % 10;
+  const mod100 = count % 100;
+  if (mod100 >= 11 && mod100 <= 19) {
+    return `${count} уроков`;
+  }
+  if (mod10 === 1) {
+    return `${count} урок`;
+  }
+  if (mod10 >= 2 && mod10 <= 4) {
+    return `${count} урока`;
+  }
+  return `${count} уроков`;
+}
+
+function formatCustomGroupTitle(
+  selected: SelectedLessonItem[],
+  part1Titles: string[] | undefined,
+  part2Titles: string[] | undefined
+): string {
+  if (!part1Titles || !part2Titles) return '';
+  
+  // Group by Part & Base Topic
+  const groups: Record<string, { part: number; baseTopic: string; items: SelectedLessonItem[] }> = {};
+  
+  selected.forEach(item => {
+    const base = getBaseTopic(item.title);
+    const key = `${item.part}-${base}`;
+    if (!groups[key]) {
+      groups[key] = { part: item.part, baseTopic: base, items: [] };
+    }
+    groups[key].items.push(item);
+  });
+
+  const topicTitles: string[] = [];
+
+  Object.values(groups).forEach(grp => {
+    const { part, baseTopic, items } = grp;
+    const allTitlesInPart = part === 1 ? part1Titles : part2Titles;
+    
+    // Find all lessons belonging to this baseTopic in this part
+    const allTopicLessonsInPart: { index: number; title: string }[] = [];
+    allTitlesInPart.forEach((title, idx) => {
+      if (getBaseTopic(title) === baseTopic) {
+        allTopicLessonsInPart.push({ index: idx, title });
+      }
+    });
+
+    // Sort items and allTopicLessons by index
+    items.sort((a, b) => a.index - b.index);
+    allTopicLessonsInPart.sort((a, b) => a.index - b.index);
+
+    // If there is only 1 lesson in this topic globally, just print the topic name
+    if (allTopicLessonsInPart.length <= 1) {
+      topicTitles.push(baseTopic);
+      return;
+    }
+
+    if (items.length === 1) {
+      topicTitles.push(items[0].title);
+      return;
+    }
+
+    // Determine the 1-based order of selected items within this topic
+    const selectedOrderNumbers: number[] = items.map(item => {
+      const idxInTopic = allTopicLessonsInPart.findIndex(t => t.index === item.index);
+      return idxInTopic + 1; // 1-based index
+    }).filter(n => n > 0);
+
+    if (selectedOrderNumbers.length === allTopicLessonsInPart.length) {
+      topicTitles.push(`${baseTopic} (полностью)`);
+    } else {
+      const ranges: string[] = [];
+      let start = selectedOrderNumbers[0];
+      let end = selectedOrderNumbers[0];
+      for (let i = 1; i < selectedOrderNumbers.length; i++) {
+        if (selectedOrderNumbers[i] === end + 1) {
+          end = selectedOrderNumbers[i];
+        } else {
+          if (start === end) {
+            ranges.push(`${start}`);
+          } else {
+            ranges.push(`${start}-${end}`);
+          }
+          start = selectedOrderNumbers[i];
+          end = selectedOrderNumbers[i];
+        }
+      }
+      if (start === end) {
+        ranges.push(`${start}`);
+      } else {
+        ranges.push(`${start}-${end}`);
+      }
+      
+      const rangesStr = ranges.join(', ');
+      const word = selectedOrderNumbers.length === 1 ? 'урок' : 'уроки';
+      topicTitles.push(`${baseTopic} (${rangesStr} ${word})`);
+    }
+  });
+
+  return topicTitles.join('. ');
 }
 
 interface RefNode extends Verse {
@@ -75,6 +211,61 @@ export function MatchDashboard({ studyingLessons, onSaveLessons, onBack }: Match
   // States for views: setup (matching selection) | game (actual speedrun) | summary (results)
   const [viewState, setViewState] = useState<'setup' | 'game' | 'summary'>('setup');
   const [selectedLessonKeys, setSelectedLessonKeys] = useState<string[]>([]);
+
+  const [customLessons, setCustomLessons] = useState<CustomLessonGroup[]>(() => {
+    try {
+      const stored = localStorage.getItem('dr_custom_lessons');
+      return stored ? JSON.parse(stored) : [];
+    } catch (e) {
+      return [];
+    }
+  });
+
+  useEffect(() => {
+    localStorage.setItem('dr_custom_lessons', JSON.stringify(customLessons));
+  }, [customLessons]);
+
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [modalPart, setModalPart] = useState<1 | 2>(1);
+  const [modalSelected, setModalSelected] = useState<SelectedLessonItem[]>([]);
+  const [editingGroupId, setEditingGroupId] = useState<string | null>(null);
+  const [renamingGroupId, setRenamingGroupId] = useState<string | null>(null);
+  const [renamingValue, setRenamingValue] = useState<string>('');
+
+  const handleStartRename = (e: React.MouseEvent, id: string, currentTitle: string) => {
+    e.stopPropagation();
+    setRenamingGroupId(id);
+    setRenamingValue(currentTitle);
+  };
+
+  const handleSaveRename = (id: string) => {
+    if (renamingValue.trim()) {
+      setCustomLessons(prev => prev.map(g => {
+        if (g.id === id) {
+          return { ...g, title: renamingValue.trim() };
+        }
+        return g;
+      }));
+    }
+    setRenamingGroupId(null);
+  };
+
+  const dueLessons = useMemo(() => {
+    return studyingLessons.filter(lesson => {
+      const status = getLessonStatusText(lesson.startDate, lesson.expiryDate);
+      return status.status === 'active' || status.status === 'expired';
+    });
+  }, [studyingLessons]);
+
+  const part1LessonTitles = useMemo(() => {
+    if (!part1Data) return [];
+    return part1Data[2].map((lesson: any) => getLessonTitleFromData(lesson, part1Data[2], part1Data[1]));
+  }, [part1Data]);
+
+  const part2LessonTitles = useMemo(() => {
+    if (!part2Data) return [];
+    return part2Data[2].map((lesson: any) => getLessonTitleFromData(lesson, part2Data[2], part2Data[1]));
+  }, [part2Data]);
   
   // Game metrics
   const [timerCount, setTimerCount] = useState(120);
@@ -84,7 +275,9 @@ export function MatchDashboard({ studyingLessons, onSaveLessons, onBack }: Match
     message: string;
     type: 'alert' | 'confirm';
     confirmText?: string;
+    cancelText?: string;
     onConfirm?: () => void;
+    onCancel?: () => void;
   } | null>(null);
 
   // Active game cards / slots
@@ -131,19 +324,20 @@ export function MatchDashboard({ studyingLessons, onSaveLessons, onBack }: Match
 
   // Pre-select lessons due for repeat
   useEffect(() => {
-    if (studyingLessons.length > 0) {
-      const defaultSelected: string[] = [];
-      studyingLessons.forEach(lesson => {
-        const status = getLessonStatusText(lesson.startDate, lesson.expiryDate);
-        if (status.status === 'active' || status.status === 'expired') {
-          defaultSelected.push(`${lesson.part}-${lesson.lessonIndex}`);
-        }
-      });
-      if (defaultSelected.length === 0) {
-        setSelectedLessonKeys(studyingLessons.map(l => `${l.part}-${l.lessonIndex}`));
-      } else {
-        setSelectedLessonKeys(defaultSelected);
+    const defaultSelected: string[] = [];
+    studyingLessons.forEach(lesson => {
+      const status = getLessonStatusText(lesson.startDate, lesson.expiryDate);
+      if (status.status === 'active' || status.status === 'expired') {
+        defaultSelected.push(`${lesson.part}-${lesson.lessonIndex}`);
       }
+    });
+
+    const customIds = customLessons.map(g => g.id);
+
+    if (defaultSelected.length === 0 && customIds.length === 0) {
+      setSelectedLessonKeys(studyingLessons.map(l => `${l.part}-${l.lessonIndex}`));
+    } else {
+      setSelectedLessonKeys([...defaultSelected, ...customIds]);
     }
   }, [studyingLessons]);
 
@@ -244,6 +438,98 @@ export function MatchDashboard({ studyingLessons, onSaveLessons, onBack }: Match
     });
   };
 
+  const handleAddCustomGroup = (selected: SelectedLessonItem[]) => {
+    const newTitle = formatCustomGroupTitle(selected, part1LessonTitles, part2LessonTitles);
+    if (editingGroupId) {
+      const existingGroup = customLessons.find(g => g.id === editingGroupId);
+      if (existingGroup) {
+        const originalAutoTitle = formatCustomGroupTitle(existingGroup.lessons, part1LessonTitles, part2LessonTitles);
+        const hasCustomTitle = existingGroup.title !== originalAutoTitle;
+        const countChanged = selected.length !== existingGroup.lessons.length;
+
+        if (hasCustomTitle && countChanged) {
+          setAppDialog({
+            title: 'Обновить название?',
+            message: `Вы изменили количество уроков. Хотите обновить название группы на новое автоматическое («${newTitle}») или оставить ваше текущее название («${existingGroup.title}»)?`,
+            type: 'confirm',
+            confirmText: 'Обновить',
+            cancelText: 'Оставить',
+            onConfirm: () => {
+              setCustomLessons(prev => prev.map(g => {
+                if (g.id === editingGroupId) {
+                  return {
+                    ...g,
+                    title: newTitle,
+                    lessons: [...selected],
+                    count: selected.length
+                  };
+                }
+                return g;
+              }));
+              setIsModalOpen(false);
+              setEditingGroupId(null);
+            },
+            onCancel: () => {
+              setCustomLessons(prev => prev.map(g => {
+                if (g.id === editingGroupId) {
+                  return {
+                    ...g,
+                    lessons: [...selected],
+                    count: selected.length
+                  };
+                }
+                return g;
+              }));
+              setIsModalOpen(false);
+              setEditingGroupId(null);
+            }
+          });
+          return;
+        } else if (hasCustomTitle) {
+          setCustomLessons(prev => prev.map(g => {
+            if (g.id === editingGroupId) {
+              return {
+                ...g,
+                lessons: [...selected],
+                count: selected.length
+              };
+            }
+            return g;
+          }));
+          setIsModalOpen(false);
+          setEditingGroupId(null);
+          return;
+        }
+      }
+
+      setCustomLessons(prev => prev.map(g => {
+        if (g.id === editingGroupId) {
+          return {
+            ...g,
+            title: newTitle,
+            lessons: [...selected],
+            count: selected.length
+          };
+        }
+        return g;
+      }));
+    } else {
+      const newGroup: CustomLessonGroup = {
+        id: 'custom-' + Date.now(),
+        title: newTitle,
+        lessons: [...selected],
+        count: selected.length
+      };
+      setCustomLessons(prev => [...prev, newGroup]);
+      setSelectedLessonKeys(prev => {
+        if (prev.includes(newGroup.id)) return prev;
+        return [...prev, newGroup.id];
+      });
+    }
+    setIsModalOpen(false);
+    setEditingGroupId(null);
+  };
+
   // Helper to determine similar verses in selected deck (exact user "старый код" getSimilar logic)
   const getSimilarVerses = (el: Verse, all: Verse[]): string[] => {
     const sameBookArr = all.filter(curEl => curEl.book === el.book);
@@ -268,13 +554,30 @@ export function MatchDashboard({ studyingLessons, onSaveLessons, onBack }: Match
   const handleStartRound = () => {
     // 1. Accumulate all verses from selected lessons
     const mixedSelection: Verse[] = [];
-    selectedLessonKeys.forEach(key => {
-      const verses = flatVersesCache.get(key) || [];
+    const addLessonVerses = (part: number, ch: number) => {
+      const cacheKey = `${part}-${ch}`;
+      const verses = flatVersesCache.get(cacheKey) || [];
       verses.forEach(v => {
         if (!mixedSelection.some(mv => String(mv.id) === String(v.id))) {
           mixedSelection.push(v);
         }
       });
+    };
+
+    selectedLessonKeys.forEach(key => {
+      if (key.startsWith('custom-')) {
+        const group = customLessons.find(g => g.id === key);
+        if (group) {
+          group.lessons.forEach(l => {
+            addLessonVerses(l.part, l.index);
+          });
+        }
+      } else {
+        const [partStr, chStr] = key.split('-');
+        const part = Number(partStr);
+        const ch = Number(chStr);
+        addLessonVerses(part, ch);
+      }
     });
 
     if (mixedSelection.length < 3) {
@@ -629,88 +932,230 @@ export function MatchDashboard({ studyingLessons, onSaveLessons, onBack }: Match
             exit={{ opacity: 0, y: -15 }}
             className="flex-1 flex flex-col min-h-0"
           >
-            {studyingLessons.length === 0 ? (
+            {dueLessons.length === 0 && customLessons.length === 0 && studyingLessons.length === 0 ? (
               <div className="flex-1 flex flex-col items-center justify-center p-8 text-center text-[#505143] gap-4">
-                <svg className="h-[12vh] w-[12vh] fill-[#878568]/40" viewBox="0 0 512 512">
-                  <path d="M403.8 34.4c12-5 25.7-2.2 34.9 6.9l64 64c6 6 9.4 14.1 9.4 22.6s-3.4 16.6-9.4 22.6l-64 64c-9.2 9.2-22.9 11.9-34.9 6.9s-19.8-16.6-19.8-29.6l0-32-32 0c-10.1 0-19.6 4.7-25.6 12.8L284 229.3 244 176l31.2-41.6C293.3 110.2 321.8 96 352 96l32 0 0-32c0-12.9 7.8-24.6 19.8-29.6z" />
+                <svg className="h-[12vh] w-[12vh] fill-[#878568]/40" viewBox="0 0 576 512">
+                  <path d="M264.5 5.2c14.9-6.9 32.1-6.9 47 0l218.6 101c8.5 3.9 13.9 12.4 13.9 21.8s-5.4 17.9-13.9 21.8l-218.6 101c-14.9 6.9-32.1 6.9-47 0L45.9 149.8C37.4 145.8 32 137.3 32 128s5.4-17.9 13.9-21.8L264.5 5.2z"/>
                 </svg>
                 <h3 className="text-[3vh] font-bold text-[#878568]">Нет изучаемых уроков</h3>
                 <p className="text-[2.1vh] leading-relaxed max-w-sm font-light text-[#878568]/95">
-                  Вы пока не добавили ни одного урока в изучаемые. Добавьте уроки в разделе <strong>"Уроки"</strong>, чтобы запускать по ним подбор.
+                  Вы пока не добавили ни одного урока в изучаемые. Однако вы можете добавить любые темы для повторения вручную с помощью кнопки ниже или перейти в раздел <strong>"Уроки"</strong>.
                 </p>
-                <button 
-                  onClick={onBack}
-                  className="mt-4 rounded-xl bg-[#505143] px-6 py-2.5 text-[2.2vh] font-medium text-[#d5ccab] shadow active:scale-95 transition-transform"
-                >
-                  Перейти в Уроки
-                </button>
+                <div className="flex gap-3 mt-4">
+                  <button 
+                    onClick={() => {
+                      setModalSelected([]);
+                      setIsModalOpen(true);
+                    }}
+                    className="rounded-xl bg-[#878568] px-5 py-2.5 text-[2vh] font-medium text-white shadow active:scale-95 transition-transform"
+                  >
+                    + Добавить вручную
+                  </button>
+                  <button 
+                    onClick={onBack}
+                    className="rounded-xl bg-[#505143] px-5 py-2.5 text-[2vh] font-medium text-[#d5ccab] shadow active:scale-95 transition-transform"
+                  >
+                    Перейти в Уроки
+                  </button>
+                </div>
               </div>
             ) : (
-              <div className="flex-1 flex flex-col min-h-0">
+              <div className="flex-1 flex flex-col min-h-0 relative">
                 <div className="p-4 bg-[#878568]/15 border-b border-[#a3a289]/10 text-[2vh] text-[#505143] leading-snug">
                   Выберите уроки для игры на подбор соответствий. Сопоставляйте стих с его каноническим адресом на время!
                 </div>
 
+                {/* Lesson checklist */}
                 <div className="flex-1 overflow-y-auto p-4 flex flex-col gap-3 custom-scrollbar">
-                  {studyingLessons.map(lesson => {
-                    const key = `${lesson.part}-${lesson.lessonIndex}`;
-                    const isChecked = selectedLessonKeys.includes(key);
-                    const statusVal = getLessonStatusText(lesson.startDate, lesson.expiryDate);
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setModalSelected([]);
+                      setIsModalOpen(true);
+                    }}
+                    className="w-full py-3 px-4 mb-1 rounded-xl border border-dashed border-[#878568]/40 bg-white/30 text-[#505143] font-bold text-[1.8vh] flex items-center justify-center gap-2 hover:bg-white/60 active:scale-[0.99] transition-all"
+                  >
+                    <span>+ Добавить уроки</span>
+                  </button>
 
-                    return (
-                      <div 
-                        key={key}
-                        onClick={() => handleToggleLessonSelection(key)}
-                        className={`relative flex items-center justify-between gap-4 rounded-2xl p-4 border transition-all cursor-pointer ${
-                          isChecked 
-                            ? 'bg-white border-[#878568] shadow-md' 
-                            : 'bg-white/45 border-[#a3a289]/20 hover:bg-white/60'
-                        }`}
-                      >
-                        <div className="flex items-center gap-4 flex-1 min-w-0 pr-8">
-                          <div className={`h-[4vh] w-[4vh] min-w-[4vh] rounded-lg border-2 flex items-center justify-center transition-colors ${
-                            isChecked 
-                              ? 'bg-[#505143] border-[#505143]' 
-                              : 'border-[#a3a289] bg-transparent'
-                          }`}>
-                            {isChecked && (
-                              <svg className="h-[2vh] w-[2vh] fill-white" viewBox="0 0 448 512">
-                                <path d="M438.6 150.6c12.5-12.5 12.5-32.8 0-45.3s-32.8-12.5-45.3 0L160 338.7 54.6 233.4c-12.5-12.5-32.8-12.5-45.3 0s-12.5 32.8 0 45.3l128 128c12.5 12.5 32.8 12.5 45.3 0l256-256z"/>
-                              </svg>
-                            )}
+                  {dueLessons.length === 0 && customLessons.length === 0 ? (
+                    <div className="py-8 px-4 text-center text-[#878568] font-light text-[1.8vh]">
+                      Нет подоспевших уроков для повторения по кривой забывания.<br/>
+                      Вы можете добавить нужные темы вручную с помощью кнопки выше.
+                    </div>
+                  ) : (
+                    <>
+                      {/* Standard due lessons */}
+                      {dueLessons.map(lesson => {
+                        const key = `${lesson.part}-${lesson.lessonIndex}`;
+                        const isChecked = selectedLessonKeys.includes(key);
+                        const statusVal = getLessonStatusText(lesson.startDate, lesson.expiryDate);
+
+                        return (
+                          <div 
+                            key={key}
+                            onClick={() => handleToggleLessonSelection(key)}
+                            className={`relative flex items-center justify-between gap-3 rounded-xl py-2.5 px-3 border transition-all cursor-pointer ${
+                              isChecked 
+                                ? 'bg-white border-[#878568] shadow-md' 
+                                : 'bg-white/45 border-[#a3a289]/20 hover:bg-white/60'
+                            }`}
+                          >
+                            <div className="flex items-center gap-3 flex-1 min-w-0 pr-6">
+                              {/* Miniature custom checkbox */}
+                              <div className={`h-[3.2vh] w-[3.2vh] min-w-[3.2vh] rounded-md border flex items-center justify-center transition-colors ${
+                                isChecked 
+                                  ? 'bg-[#505143] border-[#505143]' 
+                                  : 'border-[#a3a289] bg-transparent'
+                              }`}>
+                                {isChecked && (
+                                  <svg className="h-[1.6vh] w-[1.6vh] fill-white" viewBox="0 0 448 512">
+                                    <path d="M438.6 150.6c12.5-12.5 12.5-32.8 0-45.3s-32.8-12.5-45.3 0L160 338.7 54.6 233.4c-12.5-12.5-32.8-12.5-45.3 0s-12.5 32.8 0 45.3l128 128c12.5 12.5 32.8 12.5 45.3 0l256-256z"/>
+                                  </svg>
+                                )}
+                              </div>
+
+                              {/* Text and status */}
+                              <div className="flex-1 flex flex-col min-w-0">
+                                <div className="text-[1.8vh] font-semibold leading-tight text-[#505143] break-words">
+                                  {lesson.title}
+                                </div>
+                                <div className="flex items-center gap-2 mt-1 text-[1.35vh] flex-wrap">
+                                  <span className="text-[#a3a289]">
+                                    Этап {lesson.phase + 1}: {PHASE_TEXTS[lesson.phase]?.[0]}
+                                  </span>
+                                  <span className={`px-2 py-0.5 rounded-md ${statusVal.bg} ${statusVal.color}`}>
+                                    {statusVal.text}
+                                  </span>
+                                </div>
+                              </div>
+                            </div>
+
+                            {/* Remove from studying button */}
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleRemoveLesson(lesson);
+                              }}
+                              className="absolute top-1/2 -translate-y-1/2 right-2 h-7 w-7 flex items-center justify-center rounded-lg text-[#a3a289] hover:text-rose-600 hover:bg-rose-50/50 active:scale-95 transition-all"
+                              title="Убрать из изучения"
+                            >
+                              <X className="h-4 w-4" />
+                            </button>
                           </div>
+                        );
+                      })}
 
-                          <div className="flex-1 flex flex-col min-w-0">
-                            <div className="text-[2.1vh] font-medium leading-tight text-[#505143] break-words">
-                              {lesson.title}
+                      {/* Custom lessons */}
+                      {customLessons.map(group => {
+                        const isChecked = selectedLessonKeys.includes(group.id);
+
+                        return (
+                          <div 
+                            key={group.id}
+                            onClick={() => handleToggleLessonSelection(group.id)}
+                            className={`relative flex items-center justify-between gap-3 rounded-xl py-2.5 px-3 border transition-all cursor-pointer ${
+                              isChecked 
+                                ? 'bg-white border-[#878568] shadow-md' 
+                                : 'bg-white/45 border-[#a3a289]/20 hover:bg-white/60'
+                            }`}
+                          >
+                            <div className="flex items-center gap-3 flex-1 min-w-0 pr-16">
+                              {/* Miniature custom checkbox */}
+                              <div className={`h-[3.2vh] w-[3.2vh] min-w-[3.2vh] rounded-md border flex items-center justify-center transition-colors ${
+                                isChecked 
+                                  ? 'bg-[#505143] border-[#505143]' 
+                                  : 'border-[#a3a289] bg-transparent'
+                              }`}>
+                                {isChecked && (
+                                  <svg className="h-[1.6vh] w-[1.6vh] fill-white" viewBox="0 0 448 512">
+                                    <path d="M438.6 150.6c12.5-12.5 12.5-32.8 0-45.3s-32.8-12.5-45.3 0L160 338.7 54.6 233.4c-12.5-12.5-32.8-12.5-45.3 0s-12.5 32.8 0 45.3l128 128c12.5 12.5 32.8 12.5 45.3 0l256-256z"/>
+                                  </svg>
+                                )}
+                              </div>
+
+                              {/* Text and status */}
+                              <div className="flex-1 flex flex-col min-w-0">
+                                {renamingGroupId === group.id ? (
+                                  <input
+                                    type="text"
+                                    value={renamingValue}
+                                    onChange={(e) => setRenamingValue(e.target.value)}
+                                    onBlur={() => handleSaveRename(group.id)}
+                                    onKeyDown={(e) => {
+                                      if (e.key === 'Enter') {
+                                        handleSaveRename(group.id);
+                                      } else if (e.key === 'Escape') {
+                                        setRenamingGroupId(null);
+                                      }
+                                    }}
+                                    autoFocus
+                                    onClick={(e) => e.stopPropagation()}
+                                    className="text-[1.8vh] font-semibold leading-tight text-[#505143] bg-white border border-[#a3a289] rounded-md px-1.5 py-0.5 focus:outline-none focus:ring-1 focus:ring-[#878568] w-full"
+                                  />
+                                ) : (
+                                  <div 
+                                    onClick={(e) => handleStartRename(e, group.id, group.title)}
+                                    className="text-[1.8vh] font-semibold leading-tight text-[#505143] break-words line-clamp-4 cursor-text hover:bg-black/5 hover:rounded px-1 -mx-1 py-0.5 transition-colors"
+                                    title="Нажмите, чтобы переименовать"
+                                  >
+                                    {group.title}
+                                  </div>
+                                )}
+                                <div className="flex items-center gap-2 mt-1 text-[1.35vh]">
+                                  <span className="px-2 py-0.5 rounded-md bg-[#878568]/15 text-[#878568] border border-[#a3a289]/10 font-medium">
+                                    {getLessonsPlural(group.count)}
+                                  </span>
+                                </div>
+                              </div>
                             </div>
-                            <div className="text-[1.5vh] text-[#a3a289] mt-0.5 font-light">
-                              Часть {lesson.part} • Этап {lesson.phase + 1}: {PHASE_TEXTS[lesson.phase]?.[0]}
-                            </div>
-                            <div className={`mt-2 text-[1.4vh] rounded-lg px-2.5 py-1 inline-flex w-fit items-center ${statusVal.bg} ${statusVal.color}`}>
-                              {statusVal.text}
+
+                            {/* Action buttons */}
+                            <div className="absolute top-1/2 -translate-y-1/2 right-2 flex items-center gap-1">
+                              {/* Edit custom group button */}
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setEditingGroupId(group.id);
+                                  setModalSelected([...group.lessons]);
+                                  if (group.lessons.length > 0) {
+                                    setModalPart(group.lessons[0].part as 1 | 2);
+                                  } else {
+                                    setModalPart(1);
+                                  }
+                                  setIsModalOpen(true);
+                                }}
+                                className="h-7 w-7 flex items-center justify-center rounded-lg text-[#a3a289] hover:text-[#505143] hover:bg-[#878568]/15 active:scale-95 transition-all"
+                                title="Редактировать список уроков"
+                              >
+                                <Pencil className="h-3.5 w-3.5" />
+                              </button>
+
+                              {/* Remove custom group button */}
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setCustomLessons(prev => prev.filter(g => g.id !== group.id));
+                                  setSelectedLessonKeys(prev => prev.filter(k => k !== group.id));
+                                }}
+                                className="h-7 w-7 flex items-center justify-center rounded-lg text-[#a3a289] hover:text-rose-600 hover:bg-rose-50/50 active:scale-95 transition-all"
+                                title="Удалить из списка"
+                              >
+                                <X className="h-4 w-4" />
+                              </button>
                             </div>
                           </div>
-                        </div>
-
-                        {/* Remove from studying button */}
-                        <button
-                          type="button"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            handleRemoveLesson(lesson);
-                          }}
-                          className="absolute top-2 right-2 h-8 w-8 flex items-center justify-center rounded-lg text-[#a3a289] hover:text-rose-600 hover:bg-rose-50/50 active:scale-95 transition-all"
-                          title="Убрать из изучения"
-                        >
-                          <X className="h-5 w-5" />
-                        </button>
-                      </div>
-                    );
-                  })}
+                        );
+                      })}
+                    </>
+                  )}
                 </div>
 
-                <div className="p-4 bg-white/70 border-t border-[#a3a289]/20">
+                {/* Confirm button */}
+                <div className="p-4 flex-shrink-0">
                   <button
                     disabled={selectedLessonKeys.length === 0}
                     onClick={handleStartRound}
@@ -723,6 +1168,159 @@ export function MatchDashboard({ studyingLessons, onSaveLessons, onBack }: Match
                     Запустить подбор ({selectedLessonKeys.length})
                   </button>
                 </div>
+
+                {/* Modal for adding custom lessons */}
+                <AnimatePresence>
+                  {isModalOpen && (
+                    <div className="fixed inset-0 bg-black/45 backdrop-blur-md z-50 flex items-center justify-center p-4">
+                      <motion.div 
+                        initial={{ opacity: 0, scale: 0.95 }}
+                        animate={{ opacity: 1, scale: 1 }}
+                        exit={{ opacity: 0, scale: 0.95 }}
+                        className="bg-[#d5ccab] rounded-2xl border-2 border-[#878568] w-full max-w-lg max-h-[85vh] flex flex-col shadow-2xl overflow-hidden"
+                      >
+                        {/* Modal Header */}
+                        <div className="p-4 border-b border-[#a3a289]/20 flex items-center justify-between bg-[#878568]/15">
+                          <span className="text-[2.2vh] font-bold text-[#505143]">
+                            {editingGroupId ? 'Редактировать группу' : 'Добавить уроки'}
+                          </span>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setIsModalOpen(false);
+                              setEditingGroupId(null);
+                            }}
+                            className="h-8 w-8 rounded-lg flex items-center justify-center text-[#505143] hover:bg-black/5 active:scale-95 transition-all"
+                          >
+                            <X className="h-5 w-5" />
+                          </button>
+                        </div>
+
+                        {/* Part Selector Tabs */}
+                        <div className="flex border-b border-[#a3a289]/10 bg-white/35">
+                          <button
+                            type="button"
+                            onClick={() => setModalPart(1)}
+                            className={`flex-1 py-3 text-[1.8vh] font-bold transition-all ${
+                              modalPart === 1 
+                                ? 'text-[#505143] border-b-2 border-[#505143] bg-white' 
+                                : 'text-[#878568] hover:bg-white/20'
+                            }`}
+                          >
+                            Часть 1
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setModalPart(2)}
+                            className={`flex-1 py-3 text-[1.8vh] font-bold transition-all ${
+                              modalPart === 2 
+                                ? 'text-[#505143] border-b-2 border-[#505143] bg-white' 
+                                : 'text-[#878568] hover:bg-white/20'
+                            }`}
+                          >
+                            Часть 2
+                          </button>
+                        </div>
+
+                        {/* Select All / Deselect All */}
+                        <div className="px-4 py-2 bg-white/20 border-b border-[#a3a289]/10 flex justify-between gap-2">
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const titles = modalPart === 1 ? part1LessonTitles : part2LessonTitles;
+                              if (titles) {
+                                const currentPartSelected = titles.map((title: string, index: number) => ({ part: modalPart, index, title }));
+                                setModalSelected(prev => {
+                                  const otherParts = prev.filter(item => item.part !== modalPart);
+                                  return [...otherParts, ...currentPartSelected];
+                                });
+                              }
+                            }}
+                            className="text-[1.5vh] font-bold text-[#505143] hover:underline"
+                          >
+                            Выбрать все
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setModalSelected(prev => prev.filter(item => item.part !== modalPart));
+                            }}
+                            className="text-[1.5vh] font-bold text-[#878568] hover:underline"
+                          >
+                            Снять выделение
+                          </button>
+                        </div>
+
+                        {/* Lesson List */}
+                        <div className="flex-1 overflow-y-auto p-4 flex flex-col gap-2.5 custom-scrollbar bg-white/45">
+                          {((modalPart === 1 ? part1LessonTitles : part2LessonTitles) || []).map((title: string, index: number) => {
+                            const isSelected = modalSelected.some(item => item.part === modalPart && item.index === index);
+                            return (
+                              <div
+                                key={index}
+                                onClick={() => {
+                                  setModalSelected(prev => {
+                                    const exists = prev.some(item => item.part === modalPart && item.index === index);
+                                    if (exists) {
+                                      return prev.filter(item => !(item.part === modalPart && item.index === index));
+                                    } else {
+                                      return [...prev, { part: modalPart, index, title }];
+                                    }
+                                  });
+                                }}
+                                className={`flex items-center gap-3 rounded-xl p-3 border cursor-pointer transition-all ${
+                                  isSelected 
+                                    ? 'bg-white border-[#505143] shadow-sm' 
+                                    : 'bg-white/30 border-transparent hover:bg-white/60'
+                                }`}
+                              >
+                                {/* Miniature Checkbox */}
+                                <div className={`h-6 w-6 rounded-md border flex items-center justify-center flex-shrink-0 transition-colors ${
+                                  isSelected ? 'bg-[#505143] border-[#505143]' : 'border-[#a3a289] bg-transparent'
+                                }`}>
+                                  {isSelected && (
+                                    <svg className="h-3 w-3 fill-white" viewBox="0 0 448 512">
+                                      <path d="M438.6 150.6c12.5-12.5 12.5-32.8 0-45.3s-32.8-12.5-45.3 0L160 338.7 54.6 233.4c-12.5-12.5-32.8-12.5-45.3 0s-12.5 32.8 0 45.3l128 128c12.5 12.5 32.8 12.5 45.3 0l256-256z"/>
+                                    </svg>
+                                  )}
+                                </div>
+                                <span className="text-[1.8vh] leading-tight text-[#505143] font-medium">{title}</span>
+                              </div>
+                            );
+                          })}
+                        </div>
+
+                        {/* Modal Footer */}
+                        <div className="p-4 border-t border-[#a3a289]/20 flex gap-3 bg-[#878568]/10">
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setIsModalOpen(false);
+                              setEditingGroupId(null);
+                            }}
+                            className="flex-1 py-3 px-4 rounded-xl text-[1.8vh] font-bold text-[#505143] bg-white/55 border border-[#a3a289]/35 hover:bg-white/80 active:scale-97 transition-all"
+                          >
+                            Отмена
+                          </button>
+                          <button
+                            type="button"
+                            disabled={modalSelected.length === 0}
+                            onClick={() => {
+                              handleAddCustomGroup(modalSelected);
+                            }}
+                            className={`flex-1 py-3 px-4 rounded-xl text-[1.8vh] font-bold transition-all shadow ${
+                              modalSelected.length > 0 
+                                ? 'bg-[#505143] text-[#d5ccab] hover:opacity-95 active:scale-97 cursor-pointer' 
+                                : 'bg-[#a3a289]/40 text-[#505143]/40 cursor-not-allowed'
+                            }`}
+                          >
+                            {editingGroupId ? 'Сохранить' : 'Добавить'}
+                          </button>
+                        </div>
+                      </motion.div>
+                    </div>
+                  )}
+                </AnimatePresence>
               </div>
             )}
           </motion.div>
@@ -871,10 +1469,13 @@ export function MatchDashboard({ studyingLessons, onSaveLessons, onBack }: Match
                   <>
                     <button
                       type="button"
-                      onClick={() => setAppDialog(null)}
+                      onClick={() => {
+                        if (appDialog.onCancel) appDialog.onCancel();
+                        setAppDialog(null);
+                      }}
                       className="flex-1 py-3 px-4 rounded-xl text-[1.8vh] font-semibold text-[#505143] bg-white border border-[#a3a289]/30 hover:bg-white/60 active:scale-97 transition-all"
                     >
-                      Отмена
+                      {appDialog.cancelText || 'Отмена'}
                     </button>
                     <button
                       type="button"
