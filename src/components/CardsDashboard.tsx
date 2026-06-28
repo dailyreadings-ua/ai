@@ -236,20 +236,61 @@ function AutoFittingText({
       return;
     }
 
+    // Создаем элемент-спан для замера ширины слов, наследующий все стили testP
+    const measureSpan = document.createElement('span');
+    measureSpan.style.display = 'inline-block';
+    measureSpan.style.whiteSpace = 'nowrap';
+    measureSpan.style.position = 'absolute';
+    measureSpan.style.visibility = 'hidden';
+    measureSpan.style.left = '-9999px';
+    measureSpan.style.top = '-9999px';
+    testP.appendChild(measureSpan);
+
+    // Находим самое длинное по пиксельной ширине слово
+    const words = text.split(/\s+/).map(w => w.trim()).filter(Boolean);
+    let widestWord = '';
+    let maxMeasuredWidth = 0;
+
+    // Сначала замерим все слова на базовом размере шрифта, чтобы найти самое широкое
+    testP.style.fontSize = baseSizeVh + 'vh';
+    for (const word of words) {
+      measureSpan.textContent = word;
+      const wWidth = measureSpan.offsetWidth;
+      if (wWidth > maxMeasuredWidth) {
+        maxMeasuredWidth = wWidth;
+        widestWord = word;
+      }
+    }
+
     let size = baseSizeVh;
     const minFontSize = minSizeVh;
     const step = 0.1;
 
+    // Установим допустимую ширину для слова с безопасным отступом по бокам
+    // (например, 24px от общей ширины контейнера, чтобы слово не прилипало к краям)
+    const allowedWordWidth = Math.max(40, clientWidth - 24);
+
     // Поступово зменшуємо розмір шрифту
     while (size >= minFontSize) {
       testP.style.fontSize = size + 'vh';
-      if (testEl.scrollHeight <= clientHeight) {
+
+      // Замеряем ширину самого широкого слова на текущем размере шрифта
+      let wordWidth = 0;
+      if (widestWord) {
+        measureSpan.textContent = widestWord;
+        wordWidth = measureSpan.offsetWidth;
+      }
+
+      // Проверяем, что:
+      // 1. Общая высота текста помещается по вертикали
+      // 2. Самое длинное слово полностью помещается по горизонтали
+      if (testEl.scrollHeight <= clientHeight && wordWidth <= allowedWordWidth) {
         break;
       }
       size -= step;
     }
 
-    // Прибираємо тимчасовий елемент
+    // Прибираємо тимчасовий елемент (вместе со вложенным measureSpan)
     container.removeChild(testEl);
 
     // Застосовуємо знайдений розмір шрифту
@@ -1127,7 +1168,7 @@ export function CardsDashboard({
             initial={{ opacity: 0, y: 15 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: -15 }}
-            className="flex-1 flex flex-col min-h-0"
+            className="flex-1 flex flex-col min-h-0 relative"
           >
             <div className="flex h-[10vh] min-h-[10vh] items-center justify-center border-b border-[#a3a289]/10 px-6 flex-shrink-0">
               <div className="text-[3.5vh] font-bold text-[#878568]">
@@ -1793,29 +1834,49 @@ export function CardsDashboard({
                   </svg>
                 </button>
 
-                {/* Segmented Progress Bar Container */}
-                <div className="flex gap-1 flex-1">
-                  {initialDeck.map((c) => {
-                    const res = firstAttemptResults[c.id];
-                    const isActive = cardsDeck[currentCardIndex] && c.id === cardsDeck[currentCardIndex].id;
-                    
-                    let pillBg = "bg-[#a3a289]/25";
-                    if (res === 'correct') {
-                      pillBg = "bg-[#047857]"; // solid green
-                    } else if (res === 'incorrect') {
-                      pillBg = "bg-[#fb7185]"; // solid rose
-                    }
-                    
-                    return (
-                      <div 
-                        key={c.id} 
-                        className={`h-2 flex-grow rounded-full transition-all duration-300 ${pillBg} ${
-                          isActive ? 'ring-2 ring-[#505143] ring-offset-2 scale-y-125 bg-[#505143]' : ''
-                        }`}
-                      />
-                    );
-                  })}
-                </div>
+                {/* Continuous Three-Color Progress Bar Container */}
+                {(() => {
+                  const totalCards = initialDeck.length || 1;
+                  const correctNum = initialDeck.filter(c => firstAttemptResults[c.id] === 'correct').length;
+                  const incorrectNum = initialDeck.filter(c => firstAttemptResults[c.id] === 'incorrect').length;
+                  const correctPct = (correctNum / totalCards) * 100;
+                  const incorrectPct = (incorrectNum / totalCards) * 100;
+                  const currentPosPct = (currentCardIndex / totalCards) * 100;
+
+                  return (
+                    <div className="relative flex-1 h-2 bg-[#a3a289]/20 rounded-full select-none">
+                      {/* Proportional solid filled segments */}
+                      <div className="absolute inset-0 flex rounded-full overflow-hidden">
+                        {correctPct > 0 && (
+                          <div 
+                            className="h-full bg-[#047857] transition-all duration-300 ease-out"
+                            style={{ width: `${correctPct}%` }}
+                          />
+                        )}
+                        {incorrectPct > 0 && (
+                          <div 
+                            className="h-full bg-[#fb7185] transition-all duration-300 ease-out"
+                            style={{ width: `${incorrectPct}%` }}
+                          />
+                        )}
+                        <div className="h-full bg-transparent flex-grow" />
+                      </div>
+
+                      {/* Sliding marker representing current position */}
+                      {initialDeck.length > 0 && (
+                        <div 
+                          className="absolute top-1/2 -translate-y-1/2 h-3.5 w-3.5 rounded-full bg-[#505143] border border-white shadow-md transition-all duration-300 ease-out flex items-center justify-center"
+                          style={{ 
+                            left: `calc(${currentPosPct}% - 7px)`,
+                            zIndex: 10
+                          }}
+                        >
+                          <div className="h-1 w-1 rounded-full bg-[#d5ccab]" />
+                        </div>
+                      )}
+                    </div>
+                  );
+                })()}
 
                 {/* Right Arrow */}
                 <button
@@ -1940,7 +2001,7 @@ export function CardsDashboard({
                 >
                   
                   {/* FRONT SIDE */}
-                  <div className={`absolute inset-0 backface-hidden rounded-3xl bg-[#505143] p-6 flex flex-col justify-between shadow-2xl border border-[#a3a289]/10 select-none touch-pan-y ${
+                  <div className={`absolute inset-0 backface-hidden rounded-3xl bg-[#505143] px-4 pt-4 pb-3 flex flex-col justify-between shadow-2xl border border-[#a3a289]/10 select-none touch-pan-y ${
                     isFlipped ? 'pointer-events-none' : ''
                   }`}>
                     {/* Visual marker if already completed */}
@@ -1957,7 +2018,7 @@ export function CardsDashboard({
                         )}
                       </div>
                     )}
-                    <div className="flex-grow flex flex-col items-center justify-center p-4 min-h-0 touch-pan-y">
+                    <div className="flex-grow flex flex-col items-center justify-center px-1 py-2 min-h-0 touch-pan-y">
                       {(() => {
                         const targetSide = cardsDeck[currentCardIndex]?.targetSide;
                         const v = cardsDeck[currentCardIndex]?.verse;
@@ -2018,9 +2079,8 @@ export function CardsDashboard({
                       );
                     })()}
                   </div>
-
                   {/* BACK SIDE */}
-                  <div className={`absolute inset-0 backface-hidden rotate-y-180 rounded-3xl bg-[#878568] p-6 flex flex-col justify-between shadow-2xl border border-white/10 select-none touch-pan-y ${
+                  <div className={`absolute inset-0 backface-hidden rotate-y-180 rounded-3xl bg-[#878568] px-4 pt-4 pb-3 flex flex-col justify-between shadow-2xl border border-white/10 select-none touch-pan-y ${
                     !isFlipped ? 'pointer-events-none' : ''
                   }`}>
                     {/* Visual marker if already completed */}
@@ -2037,7 +2097,7 @@ export function CardsDashboard({
                         )}
                       </div>
                     )}
-                    <div className="flex-grow flex flex-col justify-center items-center p-4 min-h-0 touch-pan-y">
+                    <div className="flex-grow flex flex-col justify-center items-center px-1 py-2 min-h-0 touch-pan-y">
                       {(() => {
                         const targetSide = cardsDeck[currentCardIndex]?.targetSide;
                         const v = cardsDeck[currentCardIndex]?.verse;
@@ -2080,25 +2140,19 @@ export function CardsDashboard({
             animate={{ opacity: 1, scale: 1 }}
             className="flex-1 flex flex-col min-h-0"
           >
-            <div className="flex h-[10vh] min-h-[10vh] items-center justify-center border-b border-[#a3a289]/10 px-6 flex-shrink-0">
-              <div className="text-[3.5vh] font-bold text-[#878568]">
-                Повторение
-              </div>
-            </div>
-
-            <div className="flex-1 p-6 flex flex-col justify-between overflow-hidden">
+            <div className="flex-1 p-6 pt-8 flex flex-col justify-between overflow-hidden">
             <div className="flex-1 flex flex-col min-h-0">
               {/* Celeb Stats header */}
-              <div className="text-center mb-6">
-                <div className="inline-flex items-center justify-center h-[12vh] w-[12vh] rounded-full bg-emerald-100 border border-emerald-200 mb-3 text-[5vh]">
+              <div className="text-center mb-5">
+                <div className="inline-flex items-center justify-center h-[11vh] w-[11vh] rounded-full bg-emerald-100 border border-emerald-200 mb-2.5 text-[4.5vh]">
                   🏆
                 </div>
-                <h2 className="text-[3.2vh] font-bold text-[#505143] leading-tight">Карточки изучены!</h2>
-                <p className="text-[2.1vh] text-[#878568] mt-1 font-light max-w-sm mx-auto">
+                <h2 className="text-[3vh] font-bold text-[#505143] leading-tight">Карточки изучены!</h2>
+                <p className="text-[2vh] text-[#878568] mt-1 font-light max-w-sm mx-auto">
                   С первой попытки верно: <strong className="font-semibold text-emerald-800">{initialDeck.length - Object.values(firstAttemptResults).filter(val => val === 'incorrect').length}</strong> из <strong className="font-semibold">{initialDeck.length}</strong> ({initialDeck.length > 0 ? Math.round(((initialDeck.length - Object.values(firstAttemptResults).filter(val => val === 'incorrect').length) / initialDeck.length) * 100) : 0}%).
                 </p>
                 {Object.values(firstAttemptResults).filter(val => val === 'incorrect').length > 0 && (
-                  <p className="text-[1.6vh] text-[#878568] mt-1 italic font-light">
+                  <p className="text-[1.5vh] text-[#878568] mt-0.5 italic font-light">
                     Ошибочные карточки были дополнительно отработаны вами до правильного ответа!
                   </p>
                 )}
@@ -2106,45 +2160,109 @@ export function CardsDashboard({
 
               {/* Progress on each tracked lesson */}
               <div className="flex-1 flex flex-col min-h-0 bg-white/30 rounded-2xl border border-[#a3a289]/15 p-4">
-                <h4 className="text-[2vh] font-bold text-[#505143] mb-3 uppercase tracking-wide">Итоги этапов памяти:</h4>
-                <div className="flex-1 overflow-y-auto flex flex-col gap-3 pr-1 custom-scrollbar">
-                  {processedStudyUpdates.map(upd => (
-                    <div 
-                      key={upd.key}
-                      className={`p-4 rounded-xl border flex flex-col ${
-                        upd.success 
-                          ? 'bg-emerald-50/50 border-emerald-200/50' 
-                          : 'bg-amber-50/50 border-amber-200/50'
-                      }`}
-                    >
-                      <div className="text-[1.9vh] font-bold text-[#505143] mb-1">
-                        {upd.title} (Часть {upd.part})
-                      </div>
-
-                      <div className="flex items-center gap-2 mt-1">
-                        <span className="text-[1.6vh] bg-[#a3a289]/20 text-[#505143] font-medium px-2 py-0.5 rounded">
-                          Этап {upd.oldPhase + 1}
-                        </span>
-                        {upd.success && (
-                          <>
-                            <span className="text-[1.6vh] text-[#878568]">➡️</span>
-                            <span className="text-[1.6vh] bg-emerald-100 text-emerald-800 font-bold px-2 py-0.5 rounded">
-                              Этап {upd.nextPhase + 1}
-                            </span>
-                          </>
-                        )}
-                      </div>
-
-                      <p className={`text-[1.6vh] mt-2 leading-snug font-light ${upd.success ? 'text-emerald-800 font-medium' : 'text-amber-800'}`}>
-                        {upd.success ? '🎉 ' : '⚠️ '}{upd.statusMsg}
-                      </p>
+                {selectedLessonKeys.some(key => key.startsWith('custom-')) ? (
+                  <>
+                    <h4 className="text-[2vh] font-bold text-[#505143] mb-3 uppercase tracking-wide">
+                      Пройденные группы:
+                    </h4>
+                    <div className="flex-1 overflow-y-auto flex flex-col gap-4 pr-1 custom-scrollbar">
+                      {selectedLessonKeys
+                        .filter(key => key.startsWith('custom-'))
+                        .map(key => {
+                          const group = customLessons.find(g => g.id === key);
+                          if (!group) return null;
+                          return (
+                            <div key={group.id} className="p-4 rounded-xl border border-[#a3a289]/20 bg-white/40 flex flex-col">
+                              <div className="text-[2.2vh] font-bold text-[#505143] mb-1">
+                                {group.title}
+                              </div>
+                              <div className="text-[1.6vh] text-[#878568] font-medium mb-3">
+                                Количество уроков: {group.lessons.length}
+                              </div>
+                              
+                              <div className="text-[1.5vh] font-semibold text-[#505143] mb-1.5 uppercase tracking-wider opacity-80">
+                                Входящие уроки:
+                              </div>
+                              <div className="flex flex-col gap-1.5 max-h-[20vh] overflow-y-auto custom-scrollbar pr-1">
+                                {group.lessons.map((lesson, idx) => (
+                                  <div key={idx} className="text-[1.7vh] text-[#505143]/90 bg-white/30 rounded-lg px-2.5 py-1.5 border border-[#a3a289]/10">
+                                    {lesson.title} <span className="text-[1.35vh] opacity-60 font-medium">(Часть {lesson.part})</span>
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+                          );
+                        })
+                      }
                     </div>
-                  ))}
-                </div>
+                  </>
+                ) : processedStudyUpdates.length > 0 ? (
+                  <>
+                    <h4 className="text-[2vh] font-bold text-[#505143] mb-3 uppercase tracking-wide">Итоги этапов памяти:</h4>
+                    <div className="flex-1 overflow-y-auto flex flex-col gap-3 pr-1 custom-scrollbar">
+                      {processedStudyUpdates.map(upd => (
+                        <div 
+                          key={upd.key}
+                          className={`p-4 rounded-xl border flex flex-col ${
+                            upd.success 
+                              ? 'bg-emerald-50/50 border-emerald-200/50' 
+                              : 'bg-amber-50/50 border-amber-200/50'
+                          }`}
+                        >
+                          <div className="text-[1.9vh] font-bold text-[#505143] mb-1">
+                            {upd.title} (Часть {upd.part})
+                          </div>
+
+                          <div className="flex items-center gap-2 mt-1">
+                            <span className="text-[1.6vh] bg-[#a3a289]/20 text-[#505143] font-medium px-2 py-0.5 rounded">
+                              Этап {upd.oldPhase + 1}
+                            </span>
+                            {upd.success && (
+                              <>
+                                <span className="text-[1.6vh] text-[#878568]">➡️</span>
+                                <span className="text-[1.6vh] bg-emerald-100 text-emerald-800 font-bold px-2 py-0.5 rounded">
+                                  Этап {upd.nextPhase + 1}
+                                </span>
+                              </>
+                            )}
+                          </div>
+
+                          <p className={`text-[1.6vh] mt-2 leading-snug font-light ${upd.success ? 'text-emerald-800 font-medium' : 'text-amber-800'}`}>
+                            {upd.success ? '🎉 ' : '⚠️ '}{upd.statusMsg}
+                          </p>
+                        </div>
+                      ))}
+                    </div>
+                  </>
+                ) : (
+                  <>
+                    <h4 className="text-[2vh] font-bold text-[#505143] mb-3 uppercase tracking-wide">
+                      Пройденные уроки:
+                    </h4>
+                    <div className="flex-1 overflow-y-auto flex flex-col gap-3 pr-1 custom-scrollbar">
+                      {selectedLessonKeys.map(key => {
+                        const [partStr, chStr] = key.split('-');
+                        const part = Number(partStr);
+                        const ch = Number(chStr);
+                        const title = part === 1 ? part1LessonTitles?.[ch] : part2LessonTitles?.[ch];
+                        return (
+                          <div key={key} className="p-4 rounded-xl border border-[#a3a289]/15 bg-white/40 flex flex-col">
+                            <div className="text-[1.9vh] font-bold text-[#505143]">
+                              {title || `Урок ${ch + 1}`} (Часть {part})
+                            </div>
+                            <div className="text-[1.5vh] text-[#878568] mt-1">
+                              Добавьте этот урок в изучаемые в разделе «Уроки», чтобы отслеживать этапы памяти и интервалы повторения.
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </>
+                )}
               </div>
             </div>
 
-            <div className="flex flex-col gap-2 mt-6">
+            <div className="flex flex-col gap-2 mt-4">
               <div className="flex gap-3">
                 <button
                   onClick={() => setViewState('setup')}
@@ -2158,10 +2276,6 @@ export function CardsDashboard({
                 >
                   Сохранить прогресс
                 </button>
-              </div>
-              <div className="flex flex-col gap-1.5 px-1 mt-2 text-[1.5vh] text-[#878568] leading-tight font-light">
-                <p><strong>• Сохранить прогресс:</strong> зафиксирует ваши результаты и продвинет успешно повторённые уроки (где не было ошибок с первой попытки) на следующий этап интервального повторения.</p>
-                <p><strong>• Повторить раунд:</strong> перезапустит тренировку для дополнительного закрепления материала (ваши интервалы повторения при этом не изменятся).</p>
               </div>
             </div>
             </div>

@@ -930,7 +930,7 @@ export function MatchDashboard({ studyingLessons, onSaveLessons, onBack }: Match
             initial={{ opacity: 0, y: 15 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: -15 }}
-            className="flex-1 flex flex-col min-h-0"
+            className="flex-1 flex flex-col min-h-0 relative"
           >
             {dueLessons.length === 0 && customLessons.length === 0 && studyingLessons.length === 0 ? (
               <div className="flex-1 flex flex-col items-center justify-center p-8 text-center text-[#505143] gap-4">
