@@ -516,6 +516,9 @@ export function CardsDashboard({
   const [correctCardIds, setCorrectCardIds] = useState<string[]>([]);
   const [incorrectCardIds, setIncorrectCardIds] = useState<string[]>([]);
   const [cardShownTime, setCardShownTime] = useState<number>(0);
+  const [isPaused, setIsPaused] = useState(false);
+  const [pausesUsed, setPausesUsed] = useState(0);
+  const [elapsedBeforePause, setElapsedBeforePause] = useState(0);
   const [ratingFeedback, setRatingFeedback] = useState<{
     direction: 'up' | 'down';
     prev: number;
@@ -939,7 +942,46 @@ export function CardsDashboard({
     
     setCorrectCardIds([]);
     setIncorrectCardIds([]);
+    setIsPaused(false);
+    setPausesUsed(0);
+    setElapsedBeforePause(0);
     setViewState('game');
+  };
+
+  // Helper for natural Russian pause plurals
+  const getPauseWord = (count: number) => {
+    if (count % 10 === 1 && count % 100 !== 11) {
+      return 'пауза';
+    }
+    if ([2, 3, 4].includes(count % 10) && ![12, 13, 14].includes(count % 100)) {
+      return 'паузы';
+    }
+    return 'пауз';
+  };
+
+  const handlePauseToggle = () => {
+    const totalPauses = Math.max(1, Math.ceil(initialDeck.length / 15));
+    const pausesRemaining = totalPauses - pausesUsed;
+
+    if (isPaused) {
+      // Resume
+      setCardShownTime(Date.now() - elapsedBeforePause);
+      setIsPaused(false);
+    } else {
+      // Pause
+      if (pausesRemaining <= 0) {
+        setAppDialog({
+          title: 'Паузы исчерпаны',
+          message: `Для этой игры доступно максимум ${totalPauses} ${getPauseWord(totalPauses)}. Вы уже использовали все попытки!`,
+          type: 'alert'
+        });
+        return;
+      }
+      const elapsed = cardShownTime > 0 ? (Date.now() - cardShownTime) : 0;
+      setElapsedBeforePause(elapsed);
+      setIsPaused(true);
+      setPausesUsed(prev => prev + 1);
+    }
   };
 
   // Click card answer
@@ -1805,9 +1847,36 @@ export function CardsDashboard({
                     </span>
                   </div>
                 </div>
-                <span className="text-[#505143] text-right font-light italic">
-                  Часть {cardsDeck[currentCardIndex]?.part} (урок {cardsDeck[currentCardIndex]?.lessonIndex + 1})
-                </span>
+                <div className="flex flex-col items-end justify-center">
+                  {cardsDeck.length > 0 && (
+                    <button
+                      type="button"
+                      onClick={handlePauseToggle}
+                      className={`flex items-center gap-1.5 px-3 py-1 bg-[#505143]/10 hover:bg-[#505143]/20 text-[#505143] text-[1.4vh] font-bold rounded-full border border-[#505143]/15 transition-all active:scale-95 cursor-pointer select-none`}
+                      title={(() => {
+                        const totalPauses = Math.max(1, Math.ceil(initialDeck.length / 15));
+                        const remaining = totalPauses - pausesUsed;
+                        return remaining > 0 ? `Поставить игру на паузу (Доступно: ${remaining})` : 'Паузы исчерпаны';
+                      })()}
+                    >
+                      {isPaused ? (
+                        <>
+                          <svg className="h-[1.2vh] w-[1.2vh]" viewBox="0 0 384 512" fill="currentColor">
+                            <path d="M73 39c-14.8-9.1-33.4-9.4-48.5-.9S0 62.6 0 80V432c0 17.4 9.4 33.4 24.5 41.9s33.7 8.1 48.5-.9L361 297c14.3-8.7 23-24.2 23-41s-8.7-32.2-23-41L73 39z"/>
+                          </svg>
+                          <span>Продолжить</span>
+                        </>
+                      ) : (
+                        <>
+                          <svg className="h-[1.2vh] w-[1.2vh]" viewBox="0 0 320 512" fill="currentColor">
+                            <path d="M48 64C21.5 64 0 85.5 0 112V400c0 26.5 21.5 48 48 48H80c26.5 0 48-21.5 48-48V112c0-26.5-21.5-48-48-48H48zm192 0c-26.5 0-48 21.5-48 48V400c0 26.5 21.5 48 48 48h32c26.5 0 48-21.5 48-48V112c0-26.5-21.5-48-48-48H240z"/>
+                          </svg>
+                          <span>Пауза ({Math.max(0, Math.max(1, Math.ceil(initialDeck.length / 15)) - pausesUsed)})</span>
+                        </>
+                      )}
+                    </button>
+                  )}
+                </div>
               </div>
               
               {/* Segmented Progress Bar with navigation arrows */}
@@ -1815,7 +1884,7 @@ export function CardsDashboard({
                 {/* Left Arrow */}
                 <button
                   type="button"
-                  disabled={currentCardIndex === 0}
+                  disabled={currentCardIndex === 0 || isPaused}
                   onClick={() => {
                     if (currentCardIndex > 0) {
                       setIsFlipped(false);
@@ -1823,7 +1892,7 @@ export function CardsDashboard({
                     }
                   }}
                   className={`p-1.5 rounded-xl transition-all ${
-                    currentCardIndex === 0
+                    currentCardIndex === 0 || isPaused
                       ? 'opacity-20 cursor-not-allowed text-[#878568]'
                       : 'text-[#505143] hover:bg-[#878568]/15 active:scale-95 cursor-pointer'
                   }`}
@@ -1881,7 +1950,7 @@ export function CardsDashboard({
                 {/* Right Arrow */}
                 <button
                   type="button"
-                  disabled={currentCardIndex >= maxCardIndexReached}
+                  disabled={currentCardIndex >= maxCardIndexReached || isPaused}
                   onClick={() => {
                     if (currentCardIndex < maxCardIndexReached) {
                       setIsFlipped(false);
@@ -1889,7 +1958,7 @@ export function CardsDashboard({
                     }
                   }}
                   className={`p-1.5 rounded-xl transition-all ${
-                    currentCardIndex >= maxCardIndexReached
+                    currentCardIndex >= maxCardIndexReached || isPaused
                       ? 'opacity-20 cursor-not-allowed text-[#878568]'
                       : 'text-[#505143] hover:bg-[#878568]/15 active:scale-95 cursor-pointer'
                   }`}
@@ -1903,9 +1972,38 @@ export function CardsDashboard({
             </div>
 
             {/* 3D Flipping Card Container */}
-            <div className="flex-1 min-h-0 w-full max-w-md mx-auto flex items-stretch justify-center touch-pan-y">
-              <motion.div 
-                key={cardsDeck[currentCardIndex]?.id}
+            <div className="flex-1 min-h-0 w-full max-w-md mx-auto flex items-stretch justify-center relative touch-pan-y">
+              {isPaused ? (
+                <div className="absolute inset-0 z-40 rounded-3xl bg-[#505143]/15 backdrop-blur-xl border border-[#a3a289]/25 flex flex-col items-center justify-center p-6 text-center select-none shadow-2xl">
+                  {/* Big Play Icon */}
+                  <div 
+                    onClick={handlePauseToggle}
+                    className="h-[10vh] w-[10vh] rounded-full bg-[#878568] border border-white/20 flex items-center justify-center mb-6 text-[#eae4d3] shadow-lg cursor-pointer active:scale-95 transition-transform"
+                  >
+                    <svg className="h-[4vh] w-[4vh] ml-1" viewBox="0 0 384 512" fill="currentColor">
+                      <path d="M73 39c-14.8-9.1-33.4-9.4-48.5-.9S0 62.6 0 80V432c0 17.4 9.4 33.4 24.5 41.9s33.7 8.1 48.5-.9L361 297c14.3-8.7 23-24.2 23-41s-8.7-32.2-23-41L73 39z"/>
+                    </svg>
+                  </div>
+                  <h3 className="text-[2.8vh] font-black text-[#505143] tracking-wide mb-2 uppercase">
+                    Игра на паузе
+                  </h3>
+                  <p className="text-[1.8vh] text-[#505143]/80 max-w-xs mb-8 leading-relaxed">
+                    Время остановлено. Вы можете сделать перерыв и продолжить в любой момент.
+                  </p>
+                  <button
+                    type="button"
+                    onClick={handlePauseToggle}
+                    className="px-8 py-4 bg-[#505143] text-[#d5ccab] font-bold text-[2vh] rounded-2xl active:scale-95 transition-transform shadow-lg flex items-center gap-3 cursor-pointer select-none hover:bg-[#505143]/90"
+                  >
+                    <span>Продолжить игру</span>
+                  </button>
+                  <div className="mt-4 text-[1.4vh] text-[#505143]/60 font-medium">
+                    Осталось пауз: {Math.max(0, Math.max(1, Math.ceil(initialDeck.length / 15)) - pausesUsed)} из {Math.max(1, Math.ceil(initialDeck.length / 15))}
+                  </div>
+                </div>
+              ) : (
+                <motion.div 
+                  key={cardsDeck[currentCardIndex]?.id}
                 drag={currentCardIndex === maxCardIndexReached ? "x" : false}
                 dragConstraints={{ left: 0, right: 0 }}
                 dragElastic={0.8}
@@ -2128,6 +2226,7 @@ export function CardsDashboard({
 
                 </div>
               </motion.div>
+              )}
             </div>
           </motion.div>
         )}
