@@ -592,24 +592,7 @@ export function CardsDashboard({
     loadAllFunds();
   }, []);
 
-  // Auto-select lessons that are active (due) or expired (overdue) by default
-  useEffect(() => {
-    const defaultSelected: string[] = [];
-    studyingLessons.forEach(lesson => {
-      const status = getLessonStatusText(lesson.startDate, lesson.expiryDate);
-      if (status.status === 'active' || status.status === 'expired') {
-        defaultSelected.push(`${lesson.part}-${lesson.lessonIndex}`);
-      }
-    });
-
-    const customIds = customLessons.map(g => g.id);
-
-    if (defaultSelected.length === 0 && customIds.length === 0) {
-      setSelectedLessonKeys(studyingLessons.map(l => `${l.part}-${l.lessonIndex}`));
-    } else {
-      setSelectedLessonKeys([...defaultSelected, ...customIds]);
-    }
-  }, [studyingLessons]);
+  // Default to empty selection so that user can manually check desired items
 
   // Combine verses for game round
   const flatVersesCache = useMemo(() => {
@@ -1246,10 +1229,6 @@ export function CardsDashboard({
               </div>
             ) : (
               <div className="flex-1 flex flex-col min-h-0 relative">
-                <div className="p-4 bg-[#878568]/15 border-b border-[#a3a289]/10 text-[2vh] text-[#505143] leading-snug">
-                  Выберите уроки для повторения во флеш-картах. Мы автоматически выделили разделы, подошедшие к сроку повторения по кривой забывания.
-                </div>
-
                 {/* Lesson checklist */}
                 <div className="flex-1 overflow-y-auto p-4 flex flex-col gap-3 custom-scrollbar">
                   <button

@@ -1,0 +1,17 @@
+2026-06-30T19:48:32.970Z - Server running on http://localhost:3000
+2026-06-30T19:48:32.970Z - TELEGRAM_BOT_TOKEN: Present
+2026-06-30T19:48:32.970Z - APP_URL: https://ais-dev-mebk6zxntjjn6je3mekgj6-787789003873.europe-west2.run.app
+2026-06-30T19:48:32.971Z - [Telegram Webhook] Setting webhook to: https://ais-dev-mebk6zxntjjn6je3mekgj6-787789003873.europe-west2.run.app/api/telegram/webhook
+2026-06-30T19:48:33.040Z - [Telegram Webhook] Webhook successfully registered with Telegram!
+2026-06-30T19:49:16.634Z - Server running on http://localhost:3000
+2026-06-30T19:49:16.634Z - TELEGRAM_BOT_TOKEN: Present
+2026-06-30T19:49:16.634Z - APP_URL: https://ais-dev-mebk6zxntjjn6je3mekgj6-787789003873.europe-west2.run.app
+2026-06-30T19:49:16.634Z - [Telegram Webhook] Setting webhook to: https://ais-dev-mebk6zxntjjn6je3mekgj6-787789003873.europe-west2.run.app/api/telegram/webhook
+2026-06-30T19:49:16.703Z - [Telegram Webhook] Webhook successfully registered with Telegram!
+2026-06-30T19:50:17.874Z - Server running on http://localhost:3000
+2026-06-30T19:50:17.874Z - TELEGRAM_BOT_TOKEN: Present
+2026-06-30T19:50:17.874Z - APP_URL: https://ais-dev-mebk6zxntjjn6je3mekgj6-787789003873.europe-west2.run.app
+2026-06-30T19:50:17.874Z - [Telegram Webhook] Detected dev URL, rewrote to public preview URL: https://ais-pre-mebk6zxntjjn6je3mekgj6-787789003873.europe-west2.run.app
+2026-06-30T19:50:17.874Z - [Telegram Webhook] Setting webhook to: https://ais-pre-mebk6zxntjjn6je3mekgj6-787789003873.europe-west2.run.app/api/telegram/webhook
+2026-06-30T19:50:18.222Z - [Telegram Webhook] Webhook successfully registered with Telegram!
+2026-06-30T19:50:29.202Z - [Webhook] Received webhook request: {"message":{"chat":{"id":123},"text":"hello"}}
